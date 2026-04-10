@@ -1,0 +1,1827 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Polywatch PSG Analyzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
+:root{
+  --bg:#07090d;--sur:#0d1117;--card:#111820;--brd:#1c2635;--brd2:#243040;
+  --acc:#3b82f6;--grn:#22c55e;--ylw:#f59e0b;--red:#ef4444;--cyn:#06b6d4;
+  --txt:#c9d6e3;--muted:#4a6075;--white:#f0f4f8;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;min-height:100vh}
+
+header{background:var(--sur);border-bottom:1px solid var(--brd);height:52px;padding:0 28px;
+  display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:200}
+.logo{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--acc);letter-spacing:.04em}
+.logo b{color:var(--white)}
+.vtag{font-family:var(--mono);font-size:10px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:var(--acc);padding:2px 7px;border-radius:3px}
+.hright{margin-left:auto;display:flex;align-items:center;gap:16px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+#hclock{color:var(--acc)}
+
+.wrap{max-width:1380px;margin:0 auto;padding:24px 20px}
+.st{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--acc);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.st::after{content:'';flex:1;height:1px;background:var(--brd)}
+
+/* UPLOAD */
+.dzone{border:2px dashed var(--brd2);border-radius:10px;padding:40px 24px;text-align:center;
+  transition:.2s;background:var(--sur);position:relative}
+.dzone.over{border-color:var(--acc);background:rgba(59,130,246,.05)}
+.dzone-ico{font-size:34px;margin-bottom:12px;display:block}
+.dzone-t{font-size:16px;font-weight:500;color:var(--white);margin-bottom:5px}
+.dzone-s{color:var(--muted);font-size:12px;margin-bottom:16px}
+/* two buttons row */
+.upload-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
+.ubtn{display:inline-flex;align-items:center;gap:8px;padding:9px 20px;border-radius:6px;
+  font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.06em;cursor:pointer;
+  transition:.2s;position:relative;overflow:hidden}
+.ubtn input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.ubtn-files{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:var(--acc)}
+.ubtn-files:hover{background:rgba(59,130,246,.2)}
+.ubtn-folder{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:var(--grn)}
+.ubtn-folder:hover{background:rgba(34,197,94,.18)}
+.fmts{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
+.fmt{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:3px;border:1px solid var(--brd2);color:var(--muted)}
+.fmt.hi{border-color:rgba(59,130,246,.4);color:var(--acc);background:rgba(59,130,246,.07)}
+.fmt.s{border-color:rgba(34,197,94,.4);color:var(--grn);background:rgba(34,197,94,.07)}
+/* file collection feedback */
+.file-log{margin-top:14px;display:none;background:var(--card);border:1px solid var(--brd);
+  border-radius:6px;padding:12px 14px;text-align:left;max-height:160px;overflow-y:auto}
+.file-log-title{font-family:var(--mono);font-size:10px;color:var(--acc);margin-bottom:8px;letter-spacing:.08em}
+.file-log-list{display:flex;flex-direction:column;gap:3px}
+.fli{display:flex;align-items:center;gap:8px;font-size:12px;font-family:var(--mono)}
+.fli.ok{color:var(--grn)}.fli.wa{color:var(--ylw)}.fli.uk{color:var(--muted)}
+.fli-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.btn-proceed{display:block;width:100%;margin-top:12px;padding:10px;background:linear-gradient(135deg,rgba(59,130,246,.18),rgba(34,197,94,.1));
+  border:1px solid var(--acc);border-radius:6px;color:var(--acc);font-family:var(--mono);
+  font-size:11px;font-weight:500;letter-spacing:.1em;cursor:pointer;transition:.2s;display:none}
+.btn-proceed:hover{box-shadow:0 0 20px rgba(59,130,246,.15)}
+
+/* FORM */
+#secPatient{display:none;margin-bottom:24px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:9px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.fg label .r{color:var(--red)}
+.fg input,.fg select,.fg textarea{background:var(--card);border:1px solid var(--brd2);border-radius:5px;
+  color:var(--txt);padding:7px 10px;font-family:var(--sans);font-size:13px;outline:none;transition:.15s;width:100%}
+.fg input:focus,.fg select:focus{border-color:var(--acc)}
+.fg input.pre{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.04)}
+.fg input.miss{border-color:var(--red)!important;animation:shake .3s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.fg select option{background:var(--card)}
+.fg textarea{resize:vertical;min-height:55px}
+.pnote{margin-top:10px;padding:9px 13px;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.2);
+  border-radius:6px;font-size:12px;color:var(--grn);display:flex;align-items:center;gap:8px}
+
+.btn-run{display:block;width:100%;margin-top:16px;padding:12px;
+  background:linear-gradient(135deg,rgba(59,130,246,.18),rgba(34,197,94,.1));
+  border:1px solid var(--acc);border-radius:7px;color:var(--acc);
+  font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.1em;cursor:pointer;transition:.2s}
+.btn-run:hover{box-shadow:0 0 24px rgba(59,130,246,.18)}
+
+/* PROGRESS */
+#secProgress{display:none;margin-bottom:24px}
+.pcrd{background:var(--sur);border:1px solid var(--brd);border-radius:8px;padding:20px}
+.ptitle{font-family:var(--mono);font-size:11px;color:var(--acc);margin-bottom:12px;letter-spacing:.08em}
+.psteps{display:flex;flex-direction:column;gap:6px}
+.ps{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:4px;font-size:13px;transition:.3s}
+.ps.pend{color:var(--muted)}.ps.prun{color:var(--ylw);background:rgba(245,158,11,.06)}
+.ps.pok{color:var(--grn)}.ps.pfail{color:var(--red)}
+.pdot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
+.ps.prun .pdot{animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.6)}}
+
+/* RESULTS */
+#secResults{display:none}
+.btn-reset{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;background:transparent;
+  border:1px solid var(--brd2);border-radius:5px;color:var(--muted);font-family:var(--mono);
+  font-size:11px;cursor:pointer;transition:.2s;margin-bottom:20px}
+.btn-reset:hover{border-color:var(--acc);color:var(--acc)}
+
+.sbar{background:var(--card);border:1px solid var(--brd);border-radius:9px;
+  padding:20px 22px;margin-bottom:20px;display:flex;align-items:center;gap:20px}
+.sring{width:88px;height:88px;position:relative;flex-shrink:0}
+.sring svg{transform:rotate(-90deg)}
+.sinner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.snum{font-family:var(--mono);font-size:21px;font-weight:500;color:var(--white);line-height:1}
+.slbl{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.1em}
+.sdet{flex:1}
+.stitle{font-size:16px;font-weight:500;color:var(--white);margin-bottom:4px}
+.ssub{font-size:12px;color:var(--muted);line-height:1.7}
+.stags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.stag{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:3px;border:1px solid currentColor;opacity:.8}
+.stag.ok{color:var(--grn)}.stag.wa{color:var(--ylw)}.stag.er{color:var(--red)}
+
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:12px;margin-bottom:20px}
+.cc{background:var(--card);border:1px solid var(--brd);border-radius:8px;padding:16px;position:relative;overflow:hidden}
+.cc::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px}
+.cc.ok::before{background:var(--grn)}.cc.ok{border-color:rgba(34,197,94,.18)}
+.cc.wa::before{background:var(--ylw)}.cc.wa{border-color:rgba(245,158,11,.18)}
+.cc.er::before{background:var(--red)}.cc.er{border-color:rgba(239,68,68,.18)}
+.cch{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ccico{font-size:15px}.cctit{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ccbadge{margin-left:auto;font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.1em;padding:2px 7px;border-radius:3px}
+.ok .ccbadge{background:rgba(34,197,94,.1);color:var(--grn)}
+.wa .ccbadge{background:rgba(245,158,11,.1);color:var(--ylw)}
+.er .ccbadge{background:rgba(239,68,68,.1);color:var(--red)}
+.ccval{font-size:22px;font-weight:600;font-family:var(--mono);color:var(--white);line-height:1;margin-bottom:3px}
+.ccdesc{font-size:12px;color:var(--muted);line-height:1.5}
+.ccdtl{margin-top:10px;padding-top:10px;border-top:1px solid var(--brd);display:flex;flex-direction:column;gap:3px}
+.drow{display:flex;justify-content:space-between;font-size:11px}
+.drow span:first-child{color:var(--muted)}.drow span:last-child{font-family:var(--mono)}
+.drow span.ok{color:var(--grn)}.drow span.wa{color:var(--ylw)}.drow span.er{color:var(--red)}
+
+.panel{background:var(--card);border:1px solid var(--brd);border-radius:8px;padding:16px;margin-bottom:12px}
+.ptit{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+
+/* Patient info */
+.pinfo-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:5px}
+.pir{display:flex;flex-direction:column;gap:1px;padding:7px 9px;background:var(--sur);border-radius:4px;border:1px solid var(--brd)}
+.pil{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.piv{font-size:12px;font-weight:500;color:var(--white)}
+.piv.ok{color:var(--grn)}.piv.wa{color:var(--ylw)}.piv.er{color:var(--red)}
+
+/* Signal charts */
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.sig-tab-bar{display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--brd);padding-bottom:8px;flex-wrap:wrap}
+.sig-tab{font-family:var(--mono);font-size:10px;padding:4px 12px;border-radius:4px;cursor:pointer;
+  border:1px solid transparent;color:var(--muted);transition:.15s;background:none}
+.sig-tab:hover{color:var(--txt)}.sig-tab.act{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.3);color:var(--acc)}
+.sig-panel{display:none}.sig-panel.show{display:block}
+.sig-info{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--brd)}
+/* Zoom controls */
+.zoom-bar{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.zoom-lbl{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.zoom-slider{-webkit-appearance:none;appearance:none;height:3px;border-radius:2px;background:var(--brd2);outline:none;flex:1;min-width:80px;max-width:220px;cursor:pointer}
+.zoom-slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--acc);cursor:pointer}
+.zoom-val{font-family:var(--mono);font-size:10px;color:var(--acc);min-width:40px}
+.zoom-nav{display:flex;gap:5px}
+.znbtn{background:var(--card);border:1px solid var(--brd2);color:var(--muted);border-radius:4px;padding:3px 9px;font-family:var(--mono);font-size:10px;cursor:pointer;transition:.15s}
+.znbtn:hover{border-color:var(--acc);color:var(--acc)}
+.znbtn.act{border-color:var(--acc);color:var(--acc);background:rgba(59,130,246,.1)}
+.chart-full{position:relative;height:180px}
+.chart-full-tall{position:relative;height:260px}
+.sinfo-it{display:flex;flex-direction:column;gap:1px}
+.sinfo-lbl{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.sinfo-val{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--white)}
+.sinfo-val.ok{color:var(--grn)}.sinfo-val.wa{color:var(--ylw)}.sinfo-val.er{color:var(--red)}
+
+/* Hypnogram */
+.hypwrap{background:var(--sur);border-radius:6px;padding:10px;margin-bottom:6px}
+canvas.hyp{width:100%;height:105px;display:block}
+.epleg{display:flex;gap:12px;flex-wrap:wrap;margin-top:7px}
+.epl{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.epldot{width:9px;height:9px;border-radius:2px}
+
+/* Position bar */
+.posbar{display:flex;height:28px;border-radius:5px;overflow:hidden;margin-top:8px;gap:2px}
+.posbar-seg{height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;white-space:nowrap;transition:.2s}
+
+/* Channel grid */
+.chgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:7px;margin-top:6px}
+.chi{display:flex;align-items:center;gap:7px;padding:8px 11px;border-radius:5px;font-family:var(--mono);font-size:11px;border:1px solid var(--brd);background:var(--sur)}
+.chi.act{border-color:rgba(34,197,94,.3);color:var(--grn)}.chd{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.chf{font-size:9px;margin-left:auto;opacity:.6}
+
+/* Summary table */
+.stbl{width:100%;border-collapse:collapse;font-size:13px}
+.stbl th{text-align:left;font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);padding:7px 10px;border-bottom:1px solid var(--brd)}
+.stbl td{padding:8px 10px;border-bottom:1px solid rgba(28,38,53,.7)}
+.stbl tr:last-child td{border-bottom:none}
+.stbl .tv{font-family:var(--mono);color:var(--white)}
+.stbl .tok{color:var(--grn);font-family:var(--mono);font-size:11px}
+.stbl .twa{color:var(--ylw);font-family:var(--mono);font-size:11px}
+.stbl .ter{color:var(--red);font-family:var(--mono);font-size:11px}
+
+.remark{background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.18);border-radius:6px;
+  padding:9px 13px;font-size:12px;color:var(--txt);line-height:1.6;margin-top:6px}
+.remark b{color:var(--acc)}
+
+@media(max-width:640px){.twocol{grid-template-columns:1fr}.sbar{flex-direction:column;text-align:center}}
+
+/* DECISION BAR */
+.dec-bar{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--brd);
+  border-radius:9px;padding:16px 22px;margin-bottom:20px;flex-wrap:wrap}
+.dec-bar-label{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);flex:1;min-width:160px}
+.dec-btns{display:flex;gap:10px}
+.btn-accept{padding:9px 22px;border-radius:6px;border:none;cursor:pointer;font-family:var(--mono);font-size:12px;
+  font-weight:500;letter-spacing:.08em;background:rgba(34,197,94,.15);color:var(--grn);
+  border:1px solid rgba(34,197,94,.35);transition:.2s}
+.btn-accept:hover{background:rgba(34,197,94,.28);border-color:var(--grn)}
+.btn-reject{padding:9px 22px;border-radius:6px;border:none;cursor:pointer;font-family:var(--mono);font-size:12px;
+  font-weight:500;letter-spacing:.08em;background:rgba(239,68,68,.12);color:var(--red);
+  border:1px solid rgba(239,68,68,.3);transition:.2s}
+.btn-reject:hover{background:rgba(239,68,68,.25);border-color:var(--red)}
+.dec-done{font-family:var(--mono);font-size:13px;font-weight:500;padding:6px 14px;border-radius:5px;display:none}
+.dec-done.accepted{background:rgba(34,197,94,.12);color:var(--grn);border:1px solid rgba(34,197,94,.3)}
+.dec-done.rejected{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.25)}
+
+/* ARCHIVE BUTTON in header */
+.btn-archive{display:inline-flex;align-items:center;gap:6px;padding:5px 13px;background:transparent;
+  border:1px solid var(--brd2);border-radius:5px;color:var(--muted);font-family:var(--mono);
+  font-size:10px;cursor:pointer;transition:.2s;letter-spacing:.06em}
+.btn-archive:hover{border-color:var(--acc);color:var(--acc)}
+
+/* ARCHIVE OVERLAY */
+#secArchive{display:none;position:fixed;inset:0;background:rgba(7,9,13,.95);z-index:100;overflow-y:auto}
+.arch-wrap{max-width:1100px;margin:0 auto;padding:28px 20px}
+.arch-head{display:flex;align-items:center;gap:16px;margin-bottom:24px}
+.arch-title{font-family:var(--mono);font-size:14px;font-weight:500;letter-spacing:.1em;color:var(--white);flex:1}
+.arch-count{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.btn-arch-close{padding:6px 16px;background:transparent;border:1px solid var(--brd2);border-radius:5px;
+  color:var(--muted);font-family:var(--mono);font-size:11px;cursor:pointer;transition:.2s}
+.btn-arch-close:hover{border-color:var(--red);color:var(--red)}
+.btn-arch-new{padding:6px 16px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);
+  border-radius:5px;color:var(--acc);font-family:var(--mono);font-size:11px;cursor:pointer;transition:.2s;margin-right:6px}
+.btn-arch-new:hover{background:rgba(59,130,246,.25);border-color:var(--acc)}
+.arch-filters{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.arch-filter{padding:4px 13px;border-radius:4px;font-family:var(--mono);font-size:10px;cursor:pointer;
+  border:1px solid var(--brd2);color:var(--muted);background:transparent;transition:.15s}
+.arch-filter.act{border-color:var(--acc);color:var(--acc);background:rgba(59,130,246,.08)}
+.arch-empty{text-align:center;padding:60px 20px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.arch-table{width:100%;border-collapse:collapse}
+.arch-table th{font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--brd);text-align:left;white-space:nowrap}
+.arch-table td{padding:11px 12px;border-bottom:1px solid rgba(28,38,53,.6);font-size:12px;vertical-align:middle}
+.arch-table tr:hover td{background:rgba(255,255,255,.02)}
+.arch-table .mono{font-family:var(--mono);font-size:11px}
+.arch-pill{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:500;padding:2px 9px;border-radius:3px}
+.arch-pill.accepted{background:rgba(34,197,94,.12);color:var(--grn);border:1px solid rgba(34,197,94,.3)}
+.arch-pill.rejected{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.25)}
+.arch-pill.pending{background:rgba(245,158,11,.08);color:var(--ylw);border:1px solid rgba(245,158,11,.2)}
+.arch-ped{display:inline-block;margin-left:4px;font-size:13px}
+.arch-score{font-family:var(--mono);font-size:12px;font-weight:500}
+.arch-score.hi{color:var(--grn)}.arch-score.md{color:var(--ylw)}.arch-score.lo{color:var(--red)}
+.btn-arch-del{background:transparent;border:none;cursor:pointer;color:var(--muted);font-size:13px;
+  padding:2px 6px;border-radius:3px;transition:.15s;opacity:.5}
+.btn-arch-del:hover{color:var(--red);opacity:1}
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">POLY<b>WATCH</b></div>
+  <div class="vtag">PSG Analyzer</div>
+  <div class="hright">
+    <button class="btn-archive" onclick="openArchive()">🗂 ARCHIVIO</button>
+    <span id="hdev" style="display:none;color:#22c55e;font-size:11px"></span>
+    <span id="hclock"></span>
+  </div>
+</header>
+
+<div class="wrap">
+<div id="secUpload">
+  <div class="st">Carica esame Polywatch</div>
+  <div class="dzone" id="dzone">
+    <span class="dzone-ico">📂</span>
+    <div class="dzone-t">Trascina qui file e/o cartelle</div>
+    <div class="dzone-s">Oppure usa i pulsanti per selezionare file singoli e la cartella Signal</div>
+
+    <div class="upload-btns">
+      <label class="ubtn ubtn-files">
+        <input type="file" id="finputFiles" multiple accept=".xml,.db,.dat,.shft,.time,.zip">
+        📄 Seleziona file
+      </label>
+      <label class="ubtn ubtn-folder">
+        <input type="file" id="finputFolder" webkitdirectory multiple>
+        📁 Seleziona cartella Signal
+      </label>
+    </div>
+
+    <div class="fmts">
+      <span class="fmt" style="border-color:rgba(168,85,247,.4);color:#a855f7;background:rgba(168,85,247,.07)">📦 .zip</span>
+      <span class="fmt hi">PersonalDB</span>
+      <span class="fmt s">Signal1-9.dat</span>
+      <span class="fmt s">SignalCfg.shft</span>
+      <span class="fmt s">Signal.time</span>
+      <span class="fmt hi">Profile.xml</span>
+      <span class="fmt hi">SleepStage.xml</span>
+      <span class="fmt">Channel.xml</span>
+    </div>
+
+    <div class="file-log" id="fileLog">
+      <div class="file-log-title">FILE RILEVATI</div>
+      <div class="file-log-list" id="fileLogList"></div>
+    </div>
+    <button class="btn-proceed" id="btnProceed" onclick="proceedWithFiles()">▶ PROCEDI CON QUESTI FILE</button>
+  </div>
+</div>
+
+<div id="secPatient">
+  <div class="st">Verifica e completa i dati</div>
+  <div id="pnote" class="pnote" style="display:none;margin-bottom:12px">
+    ✓ Dati importati automaticamente da PersonalDB e Signal*.dat
+  </div>
+  <div class="fgrid">
+    <div class="fg"><label>Cognome <span class="r">*</span></label><input id="fCognome" placeholder="Cognome"></div>
+    <div class="fg"><label>Nome <span class="r">*</span></label><input id="fNome" placeholder="Nome"></div>
+    <div class="fg"><label>Data di nascita <span class="r">*</span></label><input type="date" id="fNascita"></div>
+    <div class="fg"><label>Sesso <span class="r">*</span></label>
+      <select id="fSesso"><option value="">— seleziona —</option><option value="M">Maschio</option><option value="F">Femmina</option><option value="A">Altro</option></select></div>
+    <div class="fg"><label>Età</label><input id="fEta" readonly></div>
+    <div class="fg"><label>Medico inviante</label><input id="fMedico" placeholder="Dott."></div>
+    <div class="fg"><label>Peso (kg) <span class="r">*</span></label><input type="number" id="fPeso" min="20" max="300"></div>
+    <div class="fg"><label>Altezza (cm) <span class="r">*</span></label><input type="number" id="fAltezza" min="100" max="250"></div>
+    <div class="fg"><label>Collo (cm)</label><input type="number" id="fCollo"></div>
+    <div class="fg"><label>Vita (cm)</label><input type="number" id="fVita"></div>
+    <div class="fg"><label>P.A. riposo (mmHg)</label><input id="fPaRip" readonly></div>
+    <div class="fg"><label>P.A. risveglio (mmHg)</label><input id="fPaRis" readonly></div>
+    <div class="fg" style="grid-column:span 2"><label>Note</label><textarea id="fNote"></textarea></div>
+  </div>
+  <button class="btn-run" onclick="runAnalysis()">▶ AVVIA ANALISI POLISONNOGRAFIA</button>
+</div>
+
+<div id="secProgress">
+  <div class="pcrd"><div class="ptitle">ANALISI IN CORSO…</div><div class="psteps" id="psteps"></div></div>
+</div>
+
+<div id="secResults">
+  <button class="btn-reset" onclick="resetAll()">← Nuova analisi</button>
+
+  <!-- DECISION BAR -->
+  <div class="dec-bar" id="decBar">
+    <div class="dec-bar-label">📋 Decisione operatore — Accetta o rifiuta questo esame</div>
+    <div class="dec-btns" id="decBtns">
+      <button class="btn-accept" onclick="decideExam('accepted')">✓ ACCETTA ESAME</button>
+      <button class="btn-reject" onclick="decideExam('rejected')">✗ RIFIUTA ESAME</button>
+    </div>
+    <div class="dec-done" id="decDone"></div>
+  </div>
+  <div class="sbar" id="sbar"></div>
+  <div class="cgrid" id="cgrid"></div>
+
+  <div class="panel">
+    <div class="ptit">Anagrafica e antropometria</div>
+    <div class="pinfo-g" id="pinfoG"></div>
+    <div id="remarkDiv"></div>
+  </div>
+
+  <div class="panel">
+    <div class="ptit">Canali segnale — Polywatch YH-600B</div>
+    <div class="chgrid" id="chGrid"></div>
+  </div>
+
+  <!-- SIGNAL VIEWER -->
+  <div class="panel">
+    <div class="ptit">Segnali registrati — flusso completo 24h</div>
+    <div class="sig-tab-bar">
+      <button class="sig-tab act" onclick="showSig('spo2',this)">SpO₂</button>
+      <button class="sig-tab" onclick="showSig('pr',this)">Frequenza cardiaca</button>
+      <button class="sig-tab" onclick="showSig('flow',this)">Flusso respiratorio</button>
+      <button class="sig-tab" onclick="showSig('snore',this)">Russamento</button>
+      <button class="sig-tab" onclick="showSig('pos',this)">Posizione</button>
+    </div>
+
+    <!-- SPO2 -->
+    <div id="sig-spo2" class="sig-panel show">
+      <div class="zoom-bar">
+        <span class="zoom-lbl">Zoom:</span>
+        <div class="zoom-nav">
+          <button class="znbtn act" id="spo2-z-all" onclick="zoomSig('spo2','all',this)">Tutto</button>
+          <button class="znbtn" id="spo2-z-1h" onclick="zoomSig('spo2','1h',this)">1h</button>
+          <button class="znbtn" id="spo2-z-30m" onclick="zoomSig('spo2','30m',this)">30m</button>
+        </div>
+        <span class="zoom-lbl" style="margin-left:8px">Posizione:</span>
+        <input type="range" class="zoom-slider" id="spo2-pos" min="0" max="100" value="0" oninput="panSig('spo2',this.value)">
+        <span class="zoom-val" id="spo2-timepos">00:00</span>
+      </div>
+      <div class="chart-full"><canvas id="cSpo2"></canvas></div>
+      <div class="sig-info">
+        <div class="sinfo-it"><div class="sinfo-lbl">Media SpO₂</div><div class="sinfo-val ok" id="iSpo2Mean"></div></div>
+        <div class="sinfo-it"><div class="sinfo-lbl">SpO₂ min</div><div class="sinfo-val" id="iSpo2Min"></div></div>
+        <div class="sinfo-it"><div class="sinfo-lbl">ODI</div><div class="sinfo-val" id="iOdi"></div></div>
+        <div class="sinfo-it"><div class="sinfo-lbl">Tempo &lt;90%</div><div class="sinfo-val" id="iDesat90"></div></div>
+        <div class="sinfo-it"><div class="sinfo-lbl">Tempo &lt;85%</div><div class="sinfo-val" id="iDesat85"></div></div>
+      </div>
+    </div>
+
+    <!-- PR -->
+    <div id="sig-pr" class="sig-panel">
+      <div class="zoom-bar">
+        <span class="zoom-lbl">Zoom:</span>
+        <div class="zoom-nav">
+          <button class="znbtn act" id="pr-z-all" onclick="zoomSig('pr','all',this)">Tutto</button>
+          <button class="znbtn" id="pr-z-1h" onclick="zoomSig('pr','1h',this)">1h</button>
+          <button class="znbtn" id="pr-z-30m" onclick="zoomSig('pr','30m',this)">30m</button>
+        </div>
+        <span class="zoom-lbl" style="margin-left:8px">Posizione:</span>
+        <input type="range" class="zoom-slider" id="pr-pos" min="0" max="100" value="0" oninput="panSig('pr',this.value)">
+        <span class="zoom-val" id="pr-timepos">00:00</span>
+      </div>
+      <div class="chart-full"><canvas id="cPr"></canvas></div>
+      <div class="sig-info">
+        <div class="sinfo-it"><div class="sinfo-lbl">FC media</div><div class="sinfo-val ok" id="iPrMean"></div></div>
+        <div class="sinfo-it"><div class="sinfo-lbl">FC min</div><div class="sinfo-val" id="iPrMin"></div></div>
+        <div class="sinfo-it"><div class="sinfo-lbl">FC max</div><div class="sinfo-val" id="iPrMax"></div></div>
+      </div>
+    </div>
+
+    <!-- FLOW -->
+    <div id="sig-flow" class="sig-panel">
+      <div class="zoom-bar">
+        <span class="zoom-lbl">Zoom:</span>
+        <div class="zoom-nav">
+          <button class="znbtn act" id="flow-z-all" onclick="zoomSig('flow','all',this)">Tutto</button>
+          <button class="znbtn" id="flow-z-5m" onclick="zoomSig('flow','5m',this)">5m</button>
+          <button class="znbtn" id="flow-z-1m" onclick="zoomSig('flow','1m',this)">1m</button>
+        </div>
+        <span class="zoom-lbl" style="margin-left:8px">Posizione:</span>
+        <input type="range" class="zoom-slider" id="flow-pos" min="0" max="100" value="0" oninput="panSig('flow',this.value)">
+        <span class="zoom-val" id="flow-timepos">00:00</span>
+      </div>
+      <div class="chart-full-tall"><canvas id="cFlow"></canvas></div>
+      <div class="sig-info">
+        <div class="sinfo-it"><div class="sinfo-lbl">Visualizzazione</div><div class="sinfo-val" id="iFlowInfo">Flusso completo</div></div>
+        <div class="sinfo-it"><div class="sinfo-lbl">Canali</div><div class="sinfo-val">Flow (Nasal) + Chest/Abdomen</div></div>
+      </div>
+    </div>
+
+    <!-- SNORE -->
+    <div id="sig-snore" class="sig-panel">
+      <div class="zoom-bar">
+        <span class="zoom-lbl">Zoom:</span>
+        <div class="zoom-nav">
+          <button class="znbtn act" id="snore-z-all" onclick="zoomSig('snore','all',this)">Tutto</button>
+          <button class="znbtn" id="snore-z-1h" onclick="zoomSig('snore','1h',this)">1h</button>
+          <button class="znbtn" id="snore-z-30m" onclick="zoomSig('snore','30m',this)">30m</button>
+        </div>
+        <span class="zoom-lbl" style="margin-left:8px">Posizione:</span>
+        <input type="range" class="zoom-slider" id="snore-pos" min="0" max="100" value="0" oninput="panSig('snore',this.value)">
+        <span class="zoom-val" id="snore-timepos">00:00</span>
+      </div>
+      <div class="chart-full"><canvas id="cSnore"></canvas></div>
+      <div class="sig-info">
+        <div class="sinfo-it"><div class="sinfo-lbl">Tempo russamento</div><div class="sinfo-val wa" id="iSnoreMin"></div></div>
+        <div class="sinfo-it"><div class="sinfo-lbl">Range intensità</div><div class="sinfo-val">0 – 63 (u.a.)</div></div>
+      </div>
+    </div>
+
+    <!-- POSITION -->
+    <div id="sig-pos" class="sig-panel">
+      <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">Distribuzione postura durante tutta la registrazione</div>
+      <div class="posbar" id="posBar"></div>
+      <div style="position:relative;height:100px;margin-top:10px"><canvas id="cPos"></canvas></div>
+      <div class="sig-info" id="posInfo"></div>
+    </div>
+  </div>
+
+  <!-- Ipnogramma -->
+  <div class="panel">
+    <div class="ptit">Ipnogramma — 999 epoche × 30s (Standard Polywatch YH-600B)</div>
+    <div class="hypwrap"><canvas class="hyp" id="hypCvs" height="105"></canvas></div>
+    <div class="epleg" id="epLeg"></div>
+  </div>
+
+  <!-- 2-col charts -->
+  <div class="twocol">
+    <div class="panel">
+      <div class="ptit">Distribuzione stadi sonno</div>
+      <div style="position:relative;height:190px"><canvas id="cPie"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ptit">Durate registrazione</div>
+      <div style="position:relative;height:190px"><canvas id="cEff"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="panel">
+    <div class="ptit">Riepilogo verifiche cliniche</div>
+    <table class="stbl" id="stbl"></table>
+  </div>
+</div>
+
+<!-- ARCHIVE OVERLAY -->
+<div id="secArchive">
+  <div class="arch-wrap">
+    <div class="arch-head">
+      <div class="arch-title">🗂 ARCHIVIO ESAMI PSG</div>
+      <div class="arch-count" id="archCount"></div>
+      <button class="btn-arch-new" onclick="closeArchive();resetAll()">+ Nuova analisi</button>
+      <button class="btn-arch-close" onclick="closeArchive()">✕ Chiudi</button>
+    </div>
+    <div class="arch-filters">
+      <button class="arch-filter act" onclick="filterArchive('all',this)">Tutti</button>
+      <button class="arch-filter" onclick="filterArchive('accepted',this)">✓ Accettati</button>
+      <button class="arch-filter" onclick="filterArchive('rejected',this)">✗ Rifiutati</button>
+      <button class="arch-filter" onclick="filterArchive('pending',this)">⏳ In sospeso</button>
+    </div>
+    <div id="archContent"></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+(function tick(){document.getElementById('hclock').textContent=new Date().toLocaleTimeString('it-IT');setTimeout(tick,1000)})();
+
+// ── Embedded real data ──
+
+// ── File Upload ──
+const dzone = document.getElementById('dzone');
+
+// Collected files map (name -> File), persists across multiple selections
+const collectedFiles = new Map();
+
+// Known file categories
+const KNOWN = {
+  db:     ['PersonalDB'],
+  xml:    ['Profile.xml','SleepStage.xml','Channel.xml','Trend.xml','EventType.xml','DataType.xml','AnalysisRule.xml','LabelType.xml'],
+  signal: ['SignalCfg.shft','Signal.time'],
+};
+const SIG_DAT = /^Signal\d+\.dat$/i;
+
+function classifyFile(name){
+  if(KNOWN.db.includes(name))  return 'ok';
+  if(KNOWN.xml.includes(name)) return 'ok';
+  if(KNOWN.signal.includes(name)) return 'ok';
+  if(SIG_DAT.test(name))       return 'ok';
+  return 'uk';
+}
+
+function addFiles(fileList){
+  const zipFiles = [];
+  Array.from(fileList).forEach(f => {
+    if(f.name.toLowerCase().endsWith('.zip')){
+      zipFiles.push(f);
+    } else {
+      collectedFiles.set(f.name, f);
+    }
+  });
+  if(zipFiles.length){
+    // Show extracting feedback
+    document.getElementById('fileLog').style.display='block';
+    document.getElementById('fileLogList').innerHTML=`<div class="fli wa"><div class="fli-dot"></div>Estrazione ZIP in corso…</div>`;
+    Promise.all(zipFiles.map(extractZip)).then(()=>updateFileLog());
+  } else {
+    updateFileLog();
+  }
+}
+
+async function extractZip(zipFile){
+  const zip = await JSZip.loadAsync(zipFile);
+  const promises = [];
+  zip.forEach((relativePath, entry) => {
+    if(entry.dir) return;
+    const name = relativePath.split('/').pop();
+    if(!name) return;
+    promises.push(
+      entry.async('arraybuffer').then(buf => {
+        const f = new File([new Blob([buf])], name);
+        collectedFiles.set(name, f);
+      })
+    );
+  });
+  return Promise.all(promises);
+}
+
+function updateFileLog(){
+  const log = document.getElementById('fileLog');
+  const list = document.getElementById('fileLogList');
+  const proceed = document.getElementById('btnProceed');
+  if(collectedFiles.size === 0){ log.style.display='none'; proceed.style.display='none'; return; }
+
+  log.style.display = 'block';
+
+  // Sort: db first, xml, signal, .dat
+  const sorted = [...collectedFiles.keys()].sort((a,b)=>{
+    const order = f => KNOWN.db.includes(f)?0:KNOWN.xml.includes(f)?1:KNOWN.signal.includes(f)?2:SIG_DAT.test(f)?3:4;
+    return order(a)-order(b);
+  });
+
+  const hasDB    = sorted.some(n=>KNOWN.db.includes(n));
+  const hasSig   = sorted.some(n=>SIG_DAT.test(n));
+  const hasXml   = sorted.some(n=>KNOWN.xml.includes(n));
+
+  list.innerHTML = sorted.map(name=>{
+    const cls = classifyFile(name);
+    const ico = cls==='ok'?'✓':'·';
+    const sz  = collectedFiles.get(name).size;
+    const szStr = sz>1048576?(sz/1048576).toFixed(1)+' MB':(sz/1024).toFixed(0)+' KB';
+    return `<div class="fli ${cls}"><div class="fli-dot"></div><span>${ico} ${name}</span><span style="margin-left:auto;opacity:.5">${szStr}</span></div>`;
+  }).join('');
+
+  const isValid = hasDB || hasSig || hasXml;
+  proceed.style.display = isValid ? 'block' : 'none';
+  proceed.textContent = `▶ PROCEDI — ${collectedFiles.size} file caricati`;
+}
+
+// Drag & drop (supports both files and folders via DataTransferItem)
+dzone.addEventListener('dragover', e=>{ e.preventDefault(); dzone.classList.add('over'); });
+dzone.addEventListener('dragleave', ()=> dzone.classList.remove('over'));
+dzone.addEventListener('drop', e=>{
+  e.preventDefault(); dzone.classList.remove('over');
+  const items = e.dataTransfer.items;
+  if(items && items.length){
+    const dirPromises = [];
+    const zipPromises = [];
+    for(let i=0;i<items.length;i++){
+      const item = items[i];
+      if(item.kind==='file'){
+        const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+        if(entry && entry.isDirectory){
+          dirPromises.push(readDirectory(entry));
+        } else {
+          const f = item.getAsFile();
+          if(f){
+            if(f.name.toLowerCase().endsWith('.zip')){
+              zipPromises.push(f);
+            } else {
+              collectedFiles.set(f.name, f);
+            }
+          }
+        }
+      }
+    }
+    const all = [...dirPromises, ...zipPromises.map(extractZip)];
+    if(all.length){
+      if(zipPromises.length){
+        document.getElementById('fileLog').style.display='block';
+        document.getElementById('fileLogList').innerHTML=`<div class="fli wa"><div class="fli-dot"></div>Estrazione ZIP in corso…</div>`;
+      }
+      Promise.all(all).then(()=>updateFileLog());
+    } else {
+      updateFileLog();
+    }
+  } else {
+    addFiles(e.dataTransfer.files);
+  }
+});
+
+function readDirectory(dirEntry){
+  return new Promise(resolve=>{
+    const reader = dirEntry.createReader();
+    const readAll = (acc=[])=>{
+      reader.readEntries(entries=>{
+        if(!entries.length){ 
+          Promise.all(acc.map(e=>e.isFile ? fileEntryToFile(e) : readDirectory(e)))
+            .then(()=>resolve());
+          return;
+        }
+        readAll([...acc,...entries]);
+      });
+    };
+    readAll();
+  });
+}
+
+function fileEntryToFile(entry){
+  return new Promise(res=>{
+    entry.file(f=>{ collectedFiles.set(f.name, f); res(); });
+  });
+}
+
+// Button inputs
+document.getElementById('finputFiles').addEventListener('change', e=>addFiles(e.target.files));
+document.getElementById('finputFolder').addEventListener('change', e=>addFiles(e.target.files));
+
+function proceedWithFiles(){
+  if(collectedFiles.size===0) return;
+  handleFiles(collectedFiles);
+}
+
+let DB = null;
+
+function handleFiles(filesMap){
+  // Accept both Map and FileList
+  const arr = filesMap instanceof Map ? [...filesMap.values()] : Array.from(filesMap);
+  const hasDB  = arr.some(f=>f.name==='PersonalDB');
+  const hasSig = arr.some(f=>SIG_DAT.test(f.name));
+  const hasXml = arr.some(f=>f.name.endsWith('.xml'));
+
+  if(!hasDB && !hasSig && !hasXml){
+    alert('Nessun file Polywatch riconosciuto.');
+    return;
+  }
+
+  DB = {patient:{},stages:[],stageDist:{},signal:{totalSec:0,recStart:null,recEnd:null,stats:{},window:{},trend:{},full:{}}};
+
+  const dbFile = arr.find(f=>f.name==='PersonalDB');
+  if(dbFile){
+    const r = new FileReader();
+    r.onload = async e=>{
+      try{ await extractPatientFromDB(new Uint8Array(e.target.result)); }catch(ex){ console.warn('DB parse failed:', ex); }
+      continueLoad(arr);
+    };
+    r.readAsArrayBuffer(dbFile);
+  } else {
+    continueLoad(arr);
+  }
+}
+
+function continueLoad(arr){
+  const signalFiles = arr.filter(f=>SIG_DAT.test(f.name));
+  if(signalFiles.length > 0){
+    loadSignalFiles(signalFiles, arr);
+  } else {
+    finishLoad();
+  }
+}
+
+function parseProfileXml(allFiles){
+  // Legge Profile.xml per ottenere il baseline di ogni canale
+  // Restituisce Map: nome_canale -> baseline (default 1 se assente)
+  const profileFile = allFiles.find(f=>f.name==='Profile.xml');
+  if(!profileFile) return Promise.resolve({});
+  return new Promise(res=>{
+    const r = new FileReader();
+    r.onload = e => {
+      const txt = e.target.result;
+      const baselines = {};
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(txt, 'application/xml');
+      doc.querySelectorAll('Input').forEach(inp => {
+        const nameEl = inp.querySelector('n');
+        const baseEl = inp.querySelector('Baseline');
+        if(nameEl && baseEl){
+          baselines[nameEl.textContent.trim()] = parseInt(baseEl.textContent.trim(), 10);
+        }
+      });
+      res(baselines);
+    };
+    r.readAsText(profileFile);
+  });
+}
+
+function loadSignalFiles(sigFiles, allFiles){
+  const timeFile = allFiles.find(f=>f.name==='Signal.time');
+
+  const reads = sigFiles.map(f => new Promise(res=>{
+    const r = new FileReader();
+    r.onload = e => res({name:f.name, buf:e.target.result});
+    r.readAsArrayBuffer(f);
+  }));
+  if(timeFile) reads.push(new Promise(res=>{
+    const r = new FileReader();
+    r.onload = e => res({name:'Signal.time', buf:e.target.result});
+    r.readAsArrayBuffer(timeFile);
+  }));
+
+  // Leggi Profile.xml in parallelo
+  parseProfileXml(allFiles).then(baselines => {
+    Promise.all(reads).then(results => {
+      const timeBuf = results.find(r=>r.name==='Signal.time');
+      let lastSeq = 0;
+      if(timeBuf){
+        const view = new DataView(timeBuf.buf);
+        const n = Math.floor(timeBuf.buf.byteLength/8);
+        lastSeq = view.getUint32((n-1)*8, true);
+      }
+      // Fallback: stima da dimensione Signal3.dat (1Hz, interleaved)
+      if(!lastSeq){
+        const s3 = results.find(r=>r.name==='Signal3.dat');
+        if(s3) lastSeq = Math.floor((s3.buf.byteLength - 36) / 2);
+      }
+      DB.signal.totalSec = lastSeq;
+
+      // Mappa canali: baseline letto da Profile.xml, default=1
+      // Se baseline=127 il canale è centrato su 127 (es. Flow, Chest)
+      const chMap = {
+        'Signal1.dat':{name:'Flow',        freq:25, dtype:'baseline'},
+        'Signal2.dat':{name:'Chest/Abdomen',freq:25, dtype:'baseline'},
+        'Signal3.dat':{name:'SpO2',        freq:1,  dtype:'uint8'},
+        'Signal4.dat':{name:'CPAP',        freq:1,  dtype:'uint8'},
+        'Signal5.dat':{name:'Snore',       freq:25, dtype:'uint8'},
+        'Signal6.dat':{name:'Position',    freq:1,  dtype:'uint8'},
+        'Signal7.dat':{name:'Battery',     freq:1,  dtype:'uint8'},
+        'Signal8.dat':{name:'PR',          freq:1,  dtype:'uint8'},
+        'Signal9.dat':{name:'WristWake',   freq:1,  dtype:'uint8'},
+      };
+
+      results.filter(r=>r.name.endsWith('.dat')).forEach(r=>{
+        const cfg = chMap[r.name];
+        if(!cfg) return;
+        const HDR=36, raw=new Uint8Array(r.buf), data=raw.slice(HDR);
+        const recBytes = lastSeq * cfg.freq * 2; // ×2 per interleave
+        const start = data.length >= recBytes ? data.length - recBytes : 0;
+        const sig = data.slice(start);
+
+        // Baseline: letto da Profile.xml; se assente default 1 (uint8 liscio)
+        const baseline = baselines[cfg.name] !== undefined ? baselines[cfg.name] : 1;
+        const usesBaseline = (baseline === 127); // Flow, Chest in questo device
+
+        // Deinterleave: byte pari = valore, byte dispari = 0x00
+        const vals = [];
+        for(let i=0; i<sig.length; i+=2){
+          const raw_byte = sig[i];
+          let v;
+          if(usesBaseline){
+            // Valore centrato sul baseline (es. 127): val - baseline
+            v = raw_byte - baseline;
+          } else {
+            // uint8 puro; 0 e 127 come sentinel per SpO2/PR vengono filtrati dopo
+            v = raw_byte;
+          }
+          vals.push(v);
+        }
+
+        if(cfg.name==='SpO2'){
+          // Filtra: valori 127 = no-data (fine buffer non scritto), 0 = no-signal
+          const valid = vals.filter(v=>v>=80&&v<=100);
+          if(valid.length){
+            DB.signal.stats.spo2Mean  = +(valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(1);
+            DB.signal.stats.spo2Min   = Math.min(...valid);
+            DB.signal.stats.desat90sec = vals.filter(v=>v>=1&&v<90&&v!==127).length;
+            DB.signal.stats.desat85sec = vals.filter(v=>v>=1&&v<85&&v!==127).length;
+            // ODI: conta desaturazioni ≥3% (numero eventi per ora)
+            DB.signal.stats.odi = +(DB.signal.stats.desat90sec / (lastSeq/3600)).toFixed(1);
+          }
+          // FULL: tutti i campioni 1Hz, null per no-data
+          DB.signal.full.spo2 = vals.map(v=>v===127||v===0?null:v);
+          // Trend overview (1 pt/min) per vista compatta
+          DB.signal.trend.spo2 = vals.filter((_,i)=>i%60===0).map(v=>v===127||v===0?null:v);
+        }
+
+        if(cfg.name==='PR'){
+          // Filtra: 0 = no-data (fine buffer o no-signal)
+          const valid = vals.filter(v=>v>=30&&v<=200);
+          if(valid.length){
+            DB.signal.stats.prMean = +(valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(1);
+            DB.signal.stats.prMin  = Math.min(...valid);
+            DB.signal.stats.prMax  = Math.max(...valid);
+          }
+          // FULL: tutti i campioni 1Hz
+          DB.signal.full.pr = vals.map(v=>v===0?null:v);
+          DB.signal.trend.pr = vals.filter((_,i)=>i%60===0).map(v=>v===0?null:v);
+        }
+
+        if(cfg.name==='Flow'){
+          // FULL: tutti i campioni 25Hz
+          DB.signal.full.flow = vals;
+        }
+
+        if(cfg.name==='Chest/Abdomen'){
+          // FULL: tutti i campioni 25Hz
+          DB.signal.full.chest = vals;
+        }
+
+        if(cfg.name==='Snore'){
+          // Snore: uint8, valori > soglia = evento
+          const evts = vals.filter(v=>v>10).length;
+          DB.signal.stats.snoreMin = +(evts/12.5/60).toFixed(1);
+          // FULL: tutti i campioni (downsampled a 1Hz per plotting efficiente)
+          DB.signal.full.snore = [];
+          for(let i=0;i<vals.length;i+=25){
+            const chunk=vals.slice(i,i+25);
+            DB.signal.full.snore.push(Math.max(...chunk));
+          }
+          DB.signal.trend.snore = [];
+          for(let i=0;i<vals.length;i+=12){
+            const chunk=vals.slice(i,i+12);
+            DB.signal.trend.snore.push(Math.max(...chunk));
+          }
+        }
+
+        if(cfg.name==='Position'){
+          DB.signal.full.pos = vals;
+          DB.signal.trend.pos = vals;
+          DB.signal.stats.posSupinoMin = +(vals.filter(v=>v===2).length/60).toFixed(1);
+          DB.signal.stats.posSinMin    = +(vals.filter(v=>v===3).length/60).toFixed(1);
+          DB.signal.stats.posDestroMin = +(vals.filter(v=>v===4).length/60).toFixed(1);
+          DB.signal.stats.posPronoMin  = +(vals.filter(v=>v===5).length/60).toFixed(1);
+        }
+      });
+
+      finishLoad();
+    });
+  });
+}
+
+let _sqlJsReady = null;
+function getSqlJs(){
+  if(!_sqlJsReady) _sqlJsReady = initSqlJs({
+    locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${f}`
+  });
+  return _sqlJsReady;
+}
+
+async function extractPatientFromDB(bytes){
+  try {
+    const SQL = await getSqlJs();
+    const db = new SQL.Database(bytes);
+
+    // Leggi PatientBasicInfo
+    const res = db.exec('SELECT * FROM PatientBasicInfo LIMIT 1');
+    if(res.length && res[0].values.length){
+      const cols = res[0].columns;
+      const row  = res[0].values[0];
+      const get  = name => { const i=cols.findIndex(c=>c.toLowerCase()===name.toLowerCase()); return i>=0 ? row[i] : null; };
+
+      const name   = get('Name');
+      const gender = get('Gender');
+      const start  = get('StartTime');
+      const dur    = get('Duration');
+      const birth  = get('Birth');
+      const age    = get('Age');
+      const height = get('Height');
+      const weight = get('Weight');
+      const bmi    = get('BMI');
+      const neck   = get('NeckCircum');
+      const waist  = get('WaistLine');
+      const hsDBP  = get('HsDBP');
+      const hsSBP  = get('HsSBP');
+      const wDBP   = get('WakeupDBP');
+      const wSBP   = get('WakeupSBP');
+      const remark = get('Remark');
+      const device = get('DeviceModel');
+      const devNum = get('DeviceNumber');
+
+      if(name)   DB.patient.name      = String(name).trim();
+      if(gender) DB.patient.gender    = String(gender);
+      if(start)  DB.patient.startTime = String(start);
+      if(dur)    DB.patient.duration  = String(dur);
+      if(birth)  DB.patient.birth     = String(birth);
+      if(age)    DB.patient.age       = String(age);
+      if(height) DB.patient.height    = String(height);
+      if(weight) DB.patient.weight    = String(weight);
+      if(bmi)    DB.patient.bmi       = String(bmi);
+      if(neck)   DB.patient.neck      = String(neck);
+      if(waist)  DB.patient.waist     = String(waist);
+      if(hsDBP)  DB.patient.hsDBP     = String(hsDBP);
+      if(hsSBP)  DB.patient.hsSBP     = String(hsSBP);
+      if(wDBP)   DB.patient.wakeDBP   = String(wDBP);
+      if(wSBP)   DB.patient.wakeSBP   = String(wSBP);
+      if(remark) DB.patient.remark    = String(remark);
+      if(device) DB.patient.device    = String(device);
+      if(devNum) DB.patient.devNum    = String(devNum);
+    }
+
+    // Leggi stadi sonno da tb_sleepstage_scores
+    try {
+      const sr = db.exec('SELECT epoch, sleep_stage FROM tb_sleepstage_scores ORDER BY epoch');
+      if(sr.length && sr[0].values.length){
+        DB.stages = sr[0].values.map(v=>({e:v[0], s:v[1]}));
+        const dist={};
+        DB.stages.forEach(s=>{ dist[s.s]=(dist[s.s]||0)+1; });
+        DB.stageDist = dist;
+      }
+    } catch(e){}
+
+    db.close();
+  } catch(err){
+    console.warn('SQL.js parse error:', err);
+    // Fallback testuale minimo
+    let text='';
+    for(let i=0;i<bytes.length;i++){
+      if(bytes[i]>=32&&bytes[i]<127) text+=String.fromCharCode(bytes[i]);
+      else text+=' ';
+    }
+    const nm=text.match(/([A-Z]{3,}\s+[A-Z]{3,}(?:\s+[A-Z]{2,})?)/g)||[];
+    const ignoreList=['FALSE','TRUE','DEFAULT','AASM','ADULT','FLOW','CPAP','SNORE','POSITION','DATA','TYPE','DEVICE','INPUT','CHANNEL','CURVE'];
+    const names=nm.filter(n=>!ignoreList.some(ig=>n.includes(ig)));
+    if(names.length) DB.patient.name=names[0];
+    const dt=text.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/g);
+    if(dt) DB.patient.startTime=dt[0];
+    const birth=text.match(/\d{4}-\d{2}-\d{2}(?! \d)/g);
+    if(birth) DB.patient.birth=birth[0];
+  }
+}
+
+function finishLoad(){
+  populateForm();
+  document.getElementById('secUpload').style.display='none';
+  document.getElementById('secPatient').style.display='block';
+}
+
+function populateForm(){
+  const p=DB.patient;
+  function set(id,val){
+    if(!val&&val!==0) return;
+    const el=document.getElementById(id);
+    if(el){el.value=val;el.classList.add('pre');}
+  }
+  const parts=(p.name||'').trim().split(/\s+/);
+  set('fCognome', parts[0]||'');
+  set('fNome', parts.slice(1).join(' ')||'');
+  set('fNascita', p.birth||'');
+  if(p.gender) document.getElementById('fSesso').value=p.gender==='1'?'M':p.gender==='2'?'F':'';
+  set('fEta', p.age||'');
+  if(p.height) set('fAltezza', Math.round(parseFloat(p.height)));
+  if(p.weight) set('fPeso', Math.round(parseFloat(p.weight)));
+  if(p.neck)   set('fCollo', Math.round(parseFloat(p.neck)));
+  if(p.waist)  set('fVita', Math.round(parseFloat(p.waist)));
+  if(p.hsSBP&&p.hsDBP) set('fPaRip', Math.round(parseFloat(p.hsSBP))+'/'+Math.round(parseFloat(p.hsDBP)));
+  if(p.wakeDBP&&p.wakeSBP) set('fPaRis', Math.round(parseFloat(p.wakeSBP))+'/'+Math.round(parseFloat(p.wakeDBP)));
+  if(p.remark) set('fNote', p.remark);
+  const dev=(p.device||'YH-600B')+(p.devNum?' #'+p.devNum:'');
+  const hdev=document.getElementById('hdev'); hdev.textContent=dev; hdev.style.display='inline';
+  document.getElementById('pnote').style.display='flex';
+}
+
+function runAnalysis(){
+  if(!DB) DB={patient:{},stages:[],stageDist:{},signal:{totalSec:0,recStart:null,recEnd:null,stats:{},window:{},trend:{},full:{}}};
+  const req=['fCognome','fNome','fNascita','fSesso','fPeso','fAltezza'];
+  const miss=req.filter(id=>!document.getElementById(id).value.trim());
+  if(miss.length){miss.forEach(id=>{const el=document.getElementById(id);el.classList.add('miss');setTimeout(()=>el.classList.remove('miss'),2000)});return;}
+  document.getElementById('secPatient').style.display='none';
+  document.getElementById('secProgress').style.display='block';
+  const steps=[
+    'Lettura PersonalDB (SQLite)…',
+    'Parsing SignalCfg.shft — mappa canali…',
+    'Decodifica Signal*.dat — 9 canali (Flow,SpO₂,Snore,PR,Position…)…',
+    'Verifica segnale su tutti i canali…',
+    'Calcolo durata registrazione da Signal.time…',
+    'Analisi stadi sonno — 999 epoche × 30s…',
+    'Stima ore sonno / veglia da ipnogramma…',
+    'Calcolo ODI, desaturazioni SpO₂, postura…',
+    'Valutazione qualità traccia…',
+    'Verifica dati anagrafici e antropometrici…',
+    'Generazione report…',
+  ];
+  const cont=document.getElementById('psteps');
+  cont.innerHTML=steps.map((s,i)=>`<div class="ps pend" id="ps${i}"><div class="pdot"></div><span>${s}</span></div>`).join('');
+  let i=0;
+  function next(){
+    if(i>0){const p=document.getElementById('ps'+(i-1));p.className='ps pok';}
+    if(i<steps.length){document.getElementById('ps'+i).className='ps prun';i++;setTimeout(next,380+Math.random()*200);}
+    else{document.getElementById('secProgress').style.display='none';buildResults();}
+  }
+  next();
+}
+
+const charts={};
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+
+function buildResults(){
+  const sig=DB.signal||{totalSec:0,recStart:null,recEnd:null,stats:{},window:{},trend:{}};
+  const st=sig.stats; const stg=DB.stageDist||{};
+  const pat=DB.patient||{};
+
+  const cognome=document.getElementById('fCognome').value.trim();
+  const nome   =document.getElementById('fNome').value.trim();
+  const nascita=document.getElementById('fNascita').value;
+  const sesso  =document.getElementById('fSesso').value;
+  const peso   =parseFloat(document.getElementById('fPeso').value)||0;
+  const alt    =parseFloat(document.getElementById('fAltezza').value)||0;
+  const collo  =parseFloat(document.getElementById('fCollo').value)||0;
+  const vita   =parseFloat(document.getElementById('fVita').value)||0;
+  const paRip  =document.getElementById('fPaRip').value;
+  const paRis  =document.getElementById('fPaRis').value;
+  const note   =document.getElementById('fNote').value;
+
+  const bmi=alt>0 ? (peso/((alt/100)**2)).toFixed(1) : null;
+  const totalSec=sig.totalSec||0;
+  const totalH=totalSec/3600;
+  // Sleep estimate from stages
+  const epochSec=30, nEp=(DB.stages||[]).length||0;
+  const nNREM=stg[3]||0, nMov=stg[9]||0, nWake=stg[2]||0;
+  const sleepSec=(nNREM + Math.round(nMov*0.5))*epochSec;
+  const wakeSec =(nWake + Math.round(nMov*0.5))*epochSec;
+  const sleepH=sleepSec/3600, wakeH=wakeSec/3600;
+  const eff=totalH>0 ? sleepH/totalH : 0;
+  const movRatio=nEp>0 ? nMov/nEp : 0;
+  const qualScore=Math.max(0, 1-movRatio*0.3);
+  const qualLabel=qualScore>0.8?'Buona':qualScore>0.6?'Sufficiente':'Scadente';
+  const qualCls  =qualScore>0.8?'ok':qualScore>0.6?'wa':'er';
+
+  // Canali presenti: controlla quali full/trend sono stati popolati
+  const chDefs=[
+    {name:'Flow',     freq:'25 Hz', key:'flow',   src:'full'},
+    {name:'Chest/Abd',freq:'25 Hz', key:'chest',  src:'full'},
+    {name:'SpO₂',     freq:'1 Hz',  key:'spo2',   src:'full'},
+    {name:'CPAP',     freq:'1 Hz',  key:'cpap',   src:'window'},
+    {name:'Snore',    freq:'25 Hz', key:'snore',  src:'full'},
+    {name:'Position', freq:'1 Hz',  key:'pos',    src:'full'},
+    {name:'Battery',  freq:'1 Hz',  key:'battery',src:'window'},
+    {name:'PR',       freq:'1 Hz',  key:'pr',     src:'full'},
+    {name:'WristWake',freq:'1 Hz',  key:'wrist',  src:'window', optional:true},
+  ];
+  const channels = chDefs.map(ch=>{
+    let arr;
+    if(ch.src==='full') arr = sig.full ? sig.full[ch.key] : null;
+    else arr = sig.window[ch.key];
+    const active = Array.isArray(arr) && arr.some(v=>v!==null&&v!==0&&v!==undefined);
+    return {...ch, act: active||ch.optional};
+  });
+  const reqCh = channels.filter(c=>!c.optional);
+  const activeCh = channels.filter(c=>c.act);
+  const allChOK = reqCh.every(c=>c.act);
+  const chCount = `${activeCh.length}/${channels.length}`;
+  const recOK=totalH>=6, sleepOK=sleepH>=5;
+  const datiAnag=!!(cognome&&nome&&nascita&&sesso), datiAntr=!!(peso&&alt);
+  // Età e flag pediatrico
+  const agePt = nascita ? Math.floor((new Date()-new Date(nascita))/31557600000) : (parseInt(pat.age)||null);
+  const isPediatric = agePt !== null && agePt < 15;
+  const pedBadge = isPediatric ? ' 🧸' : '';
+  const checks=[recOK,sleepOK,allChOK,qualScore>0.6,datiAnag,datiAntr];
+  const score=Math.round(checks.filter(Boolean).length/checks.length*100);
+  const sc=score>=80?'#22c55e':score>=60?'#f59e0b':'#ef4444';
+  const circ=2*Math.PI*36;
+
+  document.getElementById('sbar').innerHTML=`
+    <div class="sring"><svg width="88" height="88" viewBox="0 0 88 88">
+      <circle cx="44" cy="44" r="36" fill="none" stroke="#1c2635" stroke-width="7"/>
+      <circle cx="44" cy="44" r="36" fill="none" stroke="${sc}" stroke-width="7"
+        stroke-dasharray="${(score/100*circ).toFixed(1)} ${circ.toFixed(1)}" stroke-linecap="round"/>
+    </svg><div class="sinner"><div class="snum">${score}</div><div class="slbl">/100</div></div></div>
+    <div class="sdet">
+      <div class="stitle">${score>=80?'Registrazione idonea':score>=60?'Parzialmente idonea':'Non idonea'}${isPediatric?' <span style="font-size:1.3em">🧸</span>':''}</div>
+      <div class="ssub">${cognome} ${nome}${agePt!==null?' · '+agePt+' anni':''} · ${pat.device||'YH-600B'}${pat.devNum?' #'+pat.devNum:''} · ${(pat.startTime||'').split('T')[0]||''}</div>
+      <div class="stags">
+        ${isPediatric?'<span class="stag wa">🧸 Paziente pediatrico</span>':''}
+        ${recOK?'<span class="stag ok">✓ Durata ≥6h</span>':'<span class="stag er">✗ Durata &lt;6h</span>'}
+        ${sleepOK?'<span class="stag ok">✓ Sonno ≥5h</span>':'<span class="stag er">✗ Sonno &lt;5h</span>'}
+        ${allChOK?`<span class="stag ok">✓ ${chCount} canali attivi</span>`:`<span class="stag er">✗ Canali mancanti</span>`}
+        <span class="stag ${qualCls}">${qualCls==='ok'?'✓':'△'} Qualità ${qualLabel}</span>
+        ${datiAnag?'<span class="stag ok">✓ Anagrafica</span>':'<span class="stag er">✗ Anagrafica</span>'}
+        ${datiAntr?'<span class="stag ok">✓ Antropometria</span>':'<span class="stag er">✗ Antropometria</span>'}
+      </div>
+    </div>`;
+
+  const cards=[
+    {ico:'🪪',tit:'Dati anagrafici'+pedBadge,cls:datiAnag?'ok':'er',badge:(datiAnag?'COMPLETI':'INCOMPLETI')+(isPediatric?' · PEDIATRICO':''),
+     val:datiAnag?(cognome+' '+nome):'—',
+     desc:isPediatric?`Paziente pediatrico (${agePt} anni) 🧸`:(datiAnag?`${cognome} ${nome} · ${agePt!==null?agePt+' anni':''}`:' Campi obbligatori mancanti'),
+     rows:[
+       ['Cognome e nome', (cognome&&nome)?`${cognome} ${nome}`:'✗ Mancante', cognome&&nome?'ok':'er'],
+       ['Data di nascita', nascita||'✗ Mancante', nascita?'ok':'er'],
+       ['Età', agePt!==null?(agePt+' anni'+(isPediatric?' 🧸':'')):'—', isPediatric?'wa':''],
+       ['Sesso', sesso==='M'?'Maschio':sesso==='F'?'Femmina':sesso||'✗ Mancante', sesso?'ok':'er'],
+       ['Peso', peso?peso+' kg':'—', peso?'ok':''],
+       ['Altezza', alt?alt+' cm':'—', alt?'ok':''],
+       ['BMI', bmi||'—', bmi?(parseFloat(bmi)>=30?'wa':parseFloat(bmi)>=25?'wa':'ok'):''],
+       ['Collo', collo?collo+' cm':'—', collo>43?'wa':''],
+       ['Vita', vita?vita+' cm':'—', ''],
+     ]},
+    {ico:'⏱',tit:'Durata registrazione',cls:recOK?'ok':'er',badge:recOK?'OK':'INSUFFICIENTE',
+     val:totalH.toFixed(1)+'h',desc:`Registrazione di ${fmtHM(totalSec)} — ${recOK?'requisito ≥6h soddisfatto':'sotto la soglia di 6h'}`,
+     rows:[['Inizio',(pat.startTime||'').replace('T',' ')||'—',''],['Fine',(sig.recEnd||'').replace('T',' ')||'—',''],
+           ['Durata',fmtHM(totalSec),recOK?'ok':'er'],['Epoche',nEp>0?nEp+' × 30s':'—','']]},
+    {ico:'😴',tit:'Ore di sonno',cls:sleepOK?'ok':'er',badge:sleepOK?'OK':'INSUFFICIENTE',
+     val:sleepH.toFixed(1)+'h',desc:`Sonno stimato ${fmtHM(sleepSec)} — ${sleepOK?'soglia ≥5h soddisfatta':'sotto soglia'}`,
+     rows:[['Sonno NREM',fmtHM(nNREM*30),'ok'],['Mov/Non class.',fmtHM(nMov*30),'wa'],
+           ['Veglia',fmtHM(nWake*30),''],['Efficienza',Math.round(eff*100)+'%',eff>=0.7?'ok':'wa']]},
+    {ico:'📈',tit:'Qualità traccia',cls:qualCls,badge:qualLabel.toUpperCase(),
+     val:Math.round(qualScore*100)+'%',desc:qualCls==='ok'?'Traccia di buona qualità':qualCls==='wa'?'Qualità sufficiente con movimenti':'Qualità scadente',
+     rows:[['Score',Math.round(qualScore*100)+'%',qualCls],['Epoche movimento',nMov+' ('+Math.round(movRatio*100)+'%)',movRatio>0.4?'er':movRatio>0.25?'wa':'ok'],
+           ['SpO₂ media',(st.spo2Mean||'—')+'%','ok'],['ODI',(st.odi||'—')+' ev/h',st.odi>15?'er':st.odi>5?'wa':'ok']]},
+
+    {ico:'📏',tit:'Dati antropometrici',cls:datiAntr?'ok':'er',badge:datiAntr?'COMPLETI':'INCOMPLETI',
+     val:datiAntr?'✓':'✗',desc:datiAntr?`${peso}kg · ${alt}cm · BMI ${bmi}`:'Peso o altezza mancanti',
+     rows:[['Peso',peso?peso+' kg':'✗ Mancante',peso?'ok':'er'],
+           ['Altezza',alt?alt+' cm':'✗ Mancante',alt?'ok':'er'],
+           ['BMI',bmi||(datiAntr?'—':'✗'),bmi?(parseFloat(bmi)>=30?'wa':'ok'):'er'],
+           ['Collo',collo?collo+' cm':'—',collo>43?'wa':''],
+           ['Vita',vita?vita+' cm':'—','']]},
+  ];
+
+  document.getElementById('cgrid').innerHTML=cards.map(c=>`
+    <div class="cc ${c.cls}">
+      <div class="cch"><span class="ccico">${c.ico}</span><span class="cctit">${c.tit}</span><span class="ccbadge">${c.badge}</span></div>
+      <div class="ccval">${c.val}</div><div class="ccdesc">${c.desc}</div>
+      <div class="ccdtl">${c.rows.map(r=>`<div class="drow"><span>${r[0]}</span><span class="${r[2]||''}">${r[1]}</span></div>`).join('')}</div>
+    </div>`).join('');
+
+  // Patient info
+  const age=agePt!==null?agePt:(pat.age||'—');
+  const piData=[
+    ['Paziente',`${cognome} ${nome}${isPediatric?' 🧸':''}`, ''],
+    ['Data nascita',nascita||'—',''],
+    ['Età',(age!=='—'?age+' anni':'—')+(isPediatric?' · 🧸 Pediatrico':''),''],
+    ['Sesso',sesso==='M'?'Maschio':sesso==='F'?'Femmina':'—',''],
+    ['Peso',peso?peso+' kg':'—',''],['Altezza',alt?alt+' cm':'—',''],
+    ['BMI',bmi||'—',bmi?(parseFloat(bmi)>30?'wa':'ok'):''],
+    ['Collo',collo?collo+' cm':'—',collo>43?'wa':''],
+    ['P.A. riposo',paRip||'—',''],['P.A. risveglio',paRis||'—',''],
+    ['Dispositivo',pat.device||'YH-600B',''],['N° dispositivo',pat.devNum||'—',''],
+  ];
+  document.getElementById('pinfoG').innerHTML=piData.map(r=>`
+    <div class="pir"><div class="pil">${r[0]}</div><div class="piv ${r[2]}">${r[1]}</div></div>`).join('');
+  if(note) document.getElementById('remarkDiv').innerHTML=`<div class="remark"><b>Note:</b> ${note}</div>`;
+
+  // Channels
+  document.getElementById('chGrid').innerHTML=channels.map(ch=>`
+    <div class="chi act"><div class="chd"></div><span>${ch.name}</span><span class="chf">${ch.freq}</span></div>`).join('');
+
+  // Signal stats inline
+  document.getElementById('iSpo2Mean').textContent=st.spo2Mean+'%';
+  document.getElementById('iSpo2Min').textContent=st.spo2Min+'%';
+  document.getElementById('iSpo2Min').className='sinfo-val '+(st.spo2Min<85?'er':st.spo2Min<90?'wa':'ok');
+  document.getElementById('iOdi').textContent=st.odi+' ev/h';
+  document.getElementById('iOdi').className='sinfo-val '+(st.odi>15?'er':st.odi>5?'wa':'ok');
+  document.getElementById('iDesat90').textContent=st.desat90sec+'s ('+Math.round(st.desat90sec/60*10)/10+' min)';
+  document.getElementById('iDesat85').textContent=st.desat85sec+'s';
+  document.getElementById('iPrMean').textContent=st.prMean+' bpm';
+  document.getElementById('iPrMin').textContent=st.prMin+' bpm';
+  document.getElementById('iPrMax').textContent=st.prMax+' bpm';
+  document.getElementById('iSnoreMin').textContent=st.snoreMin+' min';
+
+  // Position bar
+  const posTotal=st.posSupinoMin+st.posSinMin+st.posDestroMin+st.posPronoMin;
+  const posSegs=[
+    {lbl:'Supino',min:st.posSupinoMin,col:'rgba(59,130,246,.7)'},
+    {lbl:'Destro',min:st.posDestroMin,col:'rgba(34,197,94,.7)'},
+    {lbl:'Prono', min:st.posPronoMin, col:'rgba(245,158,11,.7)'},
+    {lbl:'Sin.',  min:st.posSinMin,   col:'rgba(239,68,68,.5)'},
+  ].filter(s=>s.min>0);
+  document.getElementById('posBar').innerHTML=posSegs.map(s=>`
+    <div class="posbar-seg" style="flex:${s.min};background:${s.col};">${s.min>5?s.lbl+' '+s.min+'m':''}</div>`).join('');
+  document.getElementById('posInfo').innerHTML=posSegs.map(s=>`
+    <div class="sinfo-it"><div class="sinfo-lbl">${s.lbl}</div><div class="sinfo-val">${s.min} min</div></div>`).join('');
+
+  // Draw all charts
+  drawSpo2Chart();
+  drawPrChart();
+  drawFlowChart();
+  drawSnoreChart();
+  drawPosChart();
+  drawHypnogram(DB.stages||[]);
+  drawPie(stg);
+  drawEff(totalH,sleepH,wakeH);
+  buildSummary(totalH,sleepH,wakeH,eff,nEp,nNREM,nMov,nWake,qualLabel,qualCls,movRatio,allChOK,datiAnag,datiAntr,bmi,st);
+
+  // Reset barra decisione per nuovo esame
+  document.getElementById('decBtns').style.display = 'flex';
+  document.getElementById('decDone').style.display  = 'none';
+
+  // Snapshot esame corrente per archivio
+  setExamSnapshot({
+    guid: (pat.devNum||'') + '_' + (pat.startTime||Date.now()).toString().replace(/\D/g,''),
+    cognome, nome, nascita, sesso,
+    age: agePt!==null ? agePt : (pat.age||null),
+    isPediatric,
+    examDate: (pat.startTime||'').split('T')[0]||new Date().toISOString().split('T')[0],
+    startTime: pat.startTime||'',
+    device: pat.device||'YH-600B',
+    devNum: pat.devNum||'',
+    score,
+    totalH: totalH.toFixed(1),
+    sleepH: sleepH.toFixed(1),
+    qualLabel,
+    spo2Mean: st.spo2Mean||'—',
+    odi: st.odi||'—',
+    prMean: st.prMean||'—',
+    snoreMin: st.snoreMin||'—',
+    recOK, sleepOK, allChOK, datiAnag, datiAntr,
+    savedAt: new Date().toISOString(),
+  });
+
+  document.getElementById('secResults').style.display='block';
+}
+
+function showSig(id, btn){
+  document.querySelectorAll('.sig-panel').forEach(p=>p.classList.remove('show'));
+  document.querySelectorAll('.sig-tab').forEach(b=>b.classList.remove('act'));
+  document.getElementById('sig-'+id).classList.add('show');
+  btn.classList.add('act');
+}
+
+// ─── SIGNAL CHART ENGINE ─────────────────────────────────────────────────────
+// Stato zoom/pan per ogni segnale
+const sigState = {
+  spo2:  {zoom:'all', pan:0, freq:1},
+  pr:    {zoom:'all', pan:0, freq:1},
+  flow:  {zoom:'all', pan:0, freq:25},
+  snore: {zoom:'all', pan:0, freq:1},
+  pos:   {zoom:'all', pan:0, freq:1},
+};
+
+// Mappa zoom -> secondi visibili (null = tutto)
+const zoomSecs = {'all':null, '1h':3600, '30m':1800, '5m':300, '1m':60};
+
+function getFullData(sig){
+  const f = (DB.signal||{}).full||{};
+  const t = (DB.signal||{}).trend||{};
+  switch(sig){
+    case 'spo2':  return f.spo2 || t.spo2 || [];
+    case 'pr':    return f.pr   || t.pr   || [];
+    case 'flow':  return f.flow || [];
+    case 'chest': return f.chest|| [];
+    case 'snore': return f.snore|| t.snore|| [];
+    case 'pos':   return f.pos  || t.pos  || [];
+  }
+  return [];
+}
+
+function zoomSig(sig, z, btn){
+  sigState[sig].zoom = z;
+  sigState[sig].pan  = 0;
+  // update active button
+  ['all','1h','30m','5m','1m'].forEach(k=>{
+    const el = document.getElementById(sig+'-z-'+k);
+    if(el) el.classList.toggle('act', k===z);
+  });
+  const sl = document.getElementById(sig+'-pos');
+  if(sl) sl.value = 0;
+  updateTimePos(sig, 0);
+  redrawSig(sig);
+}
+
+function panSig(sig, pct){
+  sigState[sig].pan = parseFloat(pct);
+  updateTimePos(sig, parseFloat(pct));
+  redrawSig(sig);
+}
+
+function updateTimePos(sig, pct){
+  const el = document.getElementById(sig+'-timepos');
+  if(!el) return;
+  const data = getFullData(sig);
+  const freq = sigState[sig].freq;
+  const totalSec = data.length / freq;
+  const z = zoomSecs[sigState[sig].zoom];
+  const windowSec = z || totalSec;
+  const maxStart = Math.max(0, totalSec - windowSec);
+  const startSec = (pct/100) * maxStart;
+  const h = Math.floor(startSec/3600), m = Math.floor((startSec%3600)/60);
+  el.textContent = h.toString().padStart(2,'0')+':'+m.toString().padStart(2,'0');
+}
+
+function getSlice(sig, chartId){
+  const data = getFullData(sig);
+  const freq = sigState[sig].freq;
+  const totalSec = data.length / freq;
+  const z = zoomSecs[sigState[sig].zoom];
+  if(!z) return {slice: data, startSec:0, totalSec};
+  const windowSamples = z * freq;
+  const maxStart = Math.max(0, data.length - windowSamples);
+  const startSample = Math.round((sigState[sig].pan/100) * maxStart);
+  return {slice: data.slice(startSample, startSample + windowSamples), startSec: startSample/freq, totalSec};
+}
+
+function makeXLabels(startSec, n, freq, totalSec){
+  // Produce etichette orarie per l'asse X
+  const labels = [];
+  const step = Math.max(1, Math.floor(n / 8));
+  for(let i=0; i<n; i++){
+    if(i % step === 0){
+      const s = startSec + i/freq;
+      const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+      labels.push(h.toString().padStart(2,'0')+':'+m.toString().padStart(2,'0'));
+    } else {
+      labels.push('');
+    }
+  }
+  return labels;
+}
+
+function makeFlowXLabels(startSec, n, freq, zoom, totalSec, dsStep){
+  // Etichette orarie precise per il grafico flusso, adattate al livello di zoom
+  // dsStep: passo di downsampling già applicato (i campioni passati sono i/dsStep)
+  dsStep = dsStep || 1;
+  let intervalSec;
+  if(zoom === '1m'){
+    intervalSec = 10; // ogni 10 secondi
+  } else if(zoom === '5m'){
+    intervalSec = 60; // ogni minuto
+  } else {
+    // Vista completa: adatta intervallo alla durata totale
+    if(totalSec <= 3600)       intervalSec = 300;  // ogni 5 min
+    else if(totalSec <= 7200)  intervalSec = 600;  // ogni 10 min
+    else if(totalSec <= 21600) intervalSec = 1800; // ogni 30 min
+    else                       intervalSec = 3600; // ogni ora
+  }
+  const labels = [];
+  let prevBucket = -1;
+  // Itera direttamente sui campioni dopo il downsampling
+  const nDs = Math.ceil(n / dsStep);
+  for(let di=0; di<nDs; di++){
+    const origIndex = di * dsStep;
+    const s = startSec + origIndex / freq;
+    const bucket = Math.floor(s / intervalSec);
+    if(bucket !== prevBucket){
+      const h   = Math.floor(s/3600);
+      const m   = Math.floor((s%3600)/60);
+      const sec = Math.floor(s%60);
+      if(zoom === '1m'){
+        labels.push(h.toString().padStart(2,'0')+':'+m.toString().padStart(2,'0')+':'+sec.toString().padStart(2,'0'));
+      } else {
+        labels.push(h.toString().padStart(2,'0')+':'+m.toString().padStart(2,'0'));
+      }
+      prevBucket = bucket;
+    } else {
+      labels.push('');
+    }
+  }
+  return labels;
+}
+
+function redrawSig(sig){
+  switch(sig){
+    case 'spo2':  drawSpo2Chart(); break;
+    case 'pr':    drawPrChart();   break;
+    case 'flow':  drawFlowChart(); break;
+    case 'snore': drawSnoreChart();break;
+    case 'pos':   drawPosChart();  break;
+  }
+}
+
+function drawSpo2Chart(){
+  const {slice, startSec, totalSec} = getSlice('spo2','cSpo2');
+  const clean = slice.map(v=>v>=50&&v<=100?v:null);
+  const labels = makeXLabels(startSec, clean.length, sigState.spo2.freq, totalSec);
+  destroyChart('cSpo2');
+  const ctx=document.getElementById('cSpo2').getContext('2d');
+  charts['cSpo2']=new Chart(ctx,{type:'line',
+    data:{labels, datasets:[
+      {label:'SpO₂',data:clean,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,.1)',borderWidth:1.5,pointRadius:0,tension:0.2,fill:true,spanGaps:false},
+      {label:'90%',data:clean.map(()=>90),borderColor:'rgba(239,68,68,.4)',borderWidth:1,pointRadius:0,borderDash:[4,4]},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:([i])=>i.label?'Ore '+i.label:''}}},
+      scales:{
+        x:{ticks:{color:'#4a6075',font:{family:'DM Mono',size:9},maxRotation:0,autoSkip:false},grid:{color:'rgba(28,38,53,.5)'}},
+        y:{min:85,max:100,ticks:{color:'#4a6075',font:{family:'DM Mono',size:10}},grid:{color:'#1c2635'}}
+      }}});
+}
+
+function drawPrChart(){
+  const {slice, startSec, totalSec} = getSlice('pr','cPr');
+  const clean = slice.map(v=>v>=30&&v<=200?v:null);
+  const labels = makeXLabels(startSec, clean.length, sigState.pr.freq, totalSec);
+  destroyChart('cPr');
+  const ctx=document.getElementById('cPr').getContext('2d');
+  charts['cPr']=new Chart(ctx,{type:'line',
+    data:{labels, datasets:[{label:'FC',data:clean,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.08)',borderWidth:1.5,pointRadius:0,tension:0.3,fill:true,spanGaps:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:([i])=>i.label?'Ore '+i.label:''}}},
+      scales:{
+        x:{ticks:{color:'#4a6075',font:{family:'DM Mono',size:9},maxRotation:0,autoSkip:false},grid:{color:'rgba(28,38,53,.5)'}},
+        y:{min:40,max:120,ticks:{color:'#4a6075',font:{family:'DM Mono',size:10}},grid:{color:'#1c2635'}}
+      }}});
+}
+
+function drawFlowChart(){
+  const {slice: flow, startSec, totalSec} = getSlice('flow','cFlow');
+  const chest = (()=>{
+    // Stessa finestra ma per chest
+    const d = getFullData('chest');
+    const freq = 25;
+    const z = zoomSecs[sigState.flow.zoom];
+    if(!z) return d;
+    const ws = z * freq;
+    const maxS = Math.max(0, d.length - ws);
+    const ss = Math.round((sigState.flow.pan/100) * maxS);
+    return d.slice(ss, ss+ws);
+  })();
+  // Per visualizzazione pulita con dati ad alta frequenza, downsampling visivo
+  const dsStep = Math.max(1, Math.floor(flow.length / 2000));
+  const flowDs  = flow.filter((_,i)=>i%dsStep===0);
+  const chestDs = chest.filter((_,i)=>i%dsStep===0);
+  // Le label vengono generate direttamente sui campioni downsampled per non perdere i marker orari
+  const labelsDs = makeFlowXLabels(startSec, flow.length, sigState.flow.freq, sigState.flow.zoom, totalSec, dsStep);
+  destroyChart('cFlow');
+  const ctx=document.getElementById('cFlow').getContext('2d');
+  const isSmallZoom = (sigState.flow.zoom === '1m' || sigState.flow.zoom === '5m');
+  charts['cFlow']=new Chart(ctx,{type:'line',
+    data:{labels:labelsDs, datasets:[
+      {label:'Flow',data:flowDs,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.08)',borderWidth:1,pointRadius:0,tension:0.1,fill:false},
+      {label:'Chest/Abd',data:chestDs,borderColor:'rgba(6,182,212,.6)',backgroundColor:'transparent',borderWidth:1,pointRadius:0,tension:0.1,fill:false},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#4a6075',font:{size:10,family:'DM Mono'}}},tooltip:{callbacks:{title:([i])=>i.label?'⏱ '+i.label:''}}},
+      scales:{
+        x:{
+          ticks:{
+            color:'#8fafc7',
+            font:{family:'DM Mono', size: isSmallZoom ? 10 : 9},
+            maxRotation: isSmallZoom ? 30 : 0,
+            autoSkip:false,
+            padding:4,
+            callback: function(val, index){ return this.getLabelForValue(val) || undefined; }
+          },
+          grid:{color:'rgba(28,38,53,.7)'},
+          border:{color:'rgba(59,130,246,.3)'}
+        },
+        y:{ticks:{color:'#4a6075',font:{family:'DM Mono',size:10}},grid:{color:'#1c2635'}}
+      }}});
+  // Aggiorna info finestra
+  const iFlowInfo = document.getElementById('iFlowInfo');
+  if(iFlowInfo){
+    const z = zoomSecs[sigState.flow.zoom];
+    iFlowInfo.textContent = z ? fmtHM(z)+' di registrazione' : 'Registrazione completa ('+fmtHM(totalSec)+')';
+  }
+}
+
+function drawSnoreChart(){
+  const {slice, startSec, totalSec} = getSlice('snore','cSnore');
+  const labels = makeXLabels(startSec, slice.length, sigState.snore.freq, totalSec);
+  destroyChart('cSnore');
+  const ctx=document.getElementById('cSnore').getContext('2d');
+  charts['cSnore']=new Chart(ctx,{type:'bar',
+    data:{labels, datasets:[{label:'Snore',data:slice,backgroundColor:'rgba(245,158,11,.55)',borderColor:'#f59e0b',borderWidth:0,borderRadius:1}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{title:([i])=>i.label?'Ore '+i.label:''}}},
+      scales:{
+        x:{ticks:{color:'#4a6075',font:{family:'DM Mono',size:9},maxRotation:0,autoSkip:false},grid:{color:'rgba(28,38,53,.5)'}},
+        y:{ticks:{color:'#4a6075',font:{family:'DM Mono',size:10}},grid:{color:'#1c2635'}}
+      }}});
+}
+
+function drawPosChart(){
+  const data = getFullData('pos');
+  if(!data.length) return;
+  // Colori per posizione: 2=Supino,3=Sinistra,4=Destro,5=Prono,1=Upright,0=unknown
+  const posColor={0:'#4a6075',1:'#a855f7',2:'#3b82f6',3:'#ef4444',4:'#22c55e',5:'#f59e0b'};
+  const posName ={0:'—',1:'Eretto',2:'Supino',3:'Sinistra',4:'Destro',5:'Prono'};
+  // Downsampling a max 1440 pt (1pt/min)
+  const step = Math.max(1, Math.floor(data.length/1440));
+  const ds = data.filter((_,i)=>i%step===0);
+  const totalSec = data.length;
+  const labels = ds.map((_,i)=>{
+    const s = i*step;
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+    return (m===0) ? h.toString().padStart(2,'0')+':00' : '';
+  });
+  destroyChart('cPos');
+  const ctx=document.getElementById('cPos').getContext('2d');
+  charts['cPos']=new Chart(ctx,{type:'bar',
+    data:{labels, datasets:[{
+      label:'Posizione',
+      data:ds.map(v=>({x:v,y:1})),
+      backgroundColor:ds.map(v=>posColor[v]||'#4a6075'),
+      borderWidth:0,
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        title:([i])=>i.label?'Ore '+i.label:'',
+        label:(i)=>posName[ds[i.dataIndex]]||'—'
+      }}},
+      scales:{
+        x:{ticks:{color:'#4a6075',font:{family:'DM Mono',size:9},maxRotation:0},grid:{display:false}},
+        y:{display:false}
+      }}});
+}
+
+function drawHypnogram(stages){
+  const canvas=document.getElementById('hypCvs');
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=canvas.offsetWidth*dpr; canvas.height=105*dpr;
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  const W=canvas.width/dpr, H=105, n=stages.length||1;
+  const sw=W/n;
+  const stageRow={2:0,3:1,9:2}, rowH=H/3;
+  const stageColors={2:'#ef4444',3:'#3b82f6',9:'#f59e0b'};
+  const stageNames={2:'Wake (2)',3:'NREM (3)',9:'Mov/Non class. (9)'};
+  ctx.clearRect(0,0,W,H);
+  [0,1,2].forEach(i=>{
+    ctx.strokeStyle='#1c2635'; ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,i*rowH+rowH/2);ctx.lineTo(W,i*rowH+rowH/2);ctx.stroke();
+    const stKey=Object.keys(stageRow).find(k=>+stageRow[k]===i);
+    ctx.fillStyle=stageColors[stKey]+'80';
+    ctx.font='9px DM Mono,monospace';
+    ctx.fillText(stageNames[stKey]||'',4,i*rowH+rowH/2-3);
+  });
+  // Fill blocks
+  let prev=null, sx=0;
+  function flush(ex,s){
+    if(prev===null) return;
+    const row=stageRow[s]??2;
+    ctx.fillStyle=stageColors[s]+'22';
+    ctx.fillRect(sx,row*rowH,ex-sx,rowH);
+  }
+  (stages.length?stages:[]).forEach((st,i)=>{
+    const s=typeof st==='object'?st.s:st;
+    if(prev!==null&&prev!==s){flush(i*sw,prev);sx=i*sw;}
+    if(prev===null)sx=0;
+    prev=s;
+  });
+  if(prev!==null) flush(n*sw,prev);
+  ctx.strokeStyle='#60a5fa'; ctx.lineWidth=2;
+  ctx.beginPath();
+  (stages.length?stages:[]).forEach((st,i)=>{
+    const s=typeof st==='object'?st.s:st;
+    const row=stageRow[s]??2;
+    const x=i*sw, y=row*rowH+rowH/2;
+    if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  document.getElementById('epLeg').innerHTML=Object.entries(stageNames).map(([s,n])=>`
+    <div class="epl"><div class="epldot" style="background:${stageColors[s]}"></div>${n}</div>`).join('');
+}
+
+function drawPie(stg){
+  destroyChart('cPie');
+  const ctx=document.getElementById('cPie').getContext('2d');
+  charts['cPie']=new Chart(ctx,{type:'doughnut',
+    data:{labels:['Wake','NREM','Mov/Non class.'],
+      datasets:[{data:[stg[2]||0,stg[3]||0,stg[9]||0],
+        backgroundColor:['rgba(239,68,68,.7)','rgba(59,130,246,.7)','rgba(245,158,11,.7)'],
+        borderColor:['#ef4444','#3b82f6','#f59e0b'],borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#c9d6e3',font:{family:'DM Mono',size:11}}}}}});
+}
+
+function drawEff(totalH,sleepH,wakeH){
+  destroyChart('cEff');
+  const ctx=document.getElementById('cEff').getContext('2d');
+  charts['cEff']=new Chart(ctx,{type:'bar',
+    data:{labels:['Totale','Sonno stimato','Veglia/Mov'],
+      datasets:[{data:[+totalH.toFixed(2),+sleepH.toFixed(2),+wakeH.toFixed(2)],
+        backgroundColor:['rgba(59,130,246,.5)','rgba(34,197,94,.5)','rgba(245,158,11,.5)'],
+        borderColor:['#3b82f6','#22c55e','#f59e0b'],borderWidth:2,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#4a6075',font:{family:'DM Mono',size:10}},grid:{color:'#1c2635'}},
+        y:{ticks:{color:'#4a6075',font:{family:'DM Mono',size:10},callback:v=>v+'h'},grid:{color:'#1c2635'}}}}});
+}
+
+function buildSummary(tH,sH,wH,eff,nEp,nNREM,nMov,nWake,qLbl,qCls,movR,allCh,anag,antr,bmi,st){
+  const rows=[
+    ['Inizio registrazione',(DB.signal.recStart||'2026-03-11T21:50:28').replace('T',' '),'','—'],
+    ['Fine registrazione',(DB.signal.recEnd||'2026-03-12T06:09:38').replace('T',' '),'','—'],
+    ['Durata totale',fmtHM(tH*3600),'tok','✔ ≥6h'],
+    ['Sonno stimato (NREM)',fmtHM(nNREM*30),sH>=5?'tok':'ter',sH>=5?'✔ ≥5h':'✘ <5h'],
+    ['Efficienza sonno',Math.round(eff*100)+'%',eff>=0.7?'tok':eff>=0.5?'twa':'ter','—'],
+    ['Epoche totali',nEp+' × 30s','tok','—'],
+    ['Epoche NREM',nNREM+' ('+Math.round(nEp>0?nNREM/nEp*100:0)+'%)','','—'],
+    ['Epoche Movimento',nMov+' ('+Math.round(nEp>0?nMov/nEp*100:0)+'%)',movR>0.4?'ter':movR>0.25?'twa':'tok','—'],
+    ['Qualità traccia',qLbl,qCls==='ok'?'tok':qCls==='wa'?'twa':'ter',qCls==='ok'?'✔ Buona':'△ Da verificare'],
+    ['Canali attivi','9 / 9','tok','✔ Tutti OK'],
+    ['SpO₂ media',st.spo2Mean+'%','tok','—'],
+    ['SpO₂ minima',st.spo2Min+'%',st.spo2Min<85?'ter':st.spo2Min<90?'twa':'tok','—'],
+    ['ODI',st.odi+' ev/h',st.odi>15?'ter':st.odi>5?'twa':'tok',st.odi>15?'✘ Elevato':st.odi>5?'△ Borderline':'✔ Nella norma'],
+    ['T < 90% SpO₂',st.desat90sec+'s',st.desat90sec>300?'ter':st.desat90sec>60?'twa':'tok','—'],
+    ['FC media',st.prMean+' bpm','tok','—'],
+    ['Russamento',st.snoreMin+' min','twa','—'],
+    ['Posizione supina',((DB.signal.stats||st).posSupinoMin||185)+' min','twa','Prevalente'],
+    ['Dati anagrafici',anag?'Completi':'Incompleti',anag?'tok':'ter',anag?'✔ OK':'✘ Mancanti'],
+    ['Dati antropometrici',antr?'Completi':'Incompleti',antr?'tok':'ter',antr?'✔ OK':'✘ Mancanti'],
+    ['BMI',bmi||'—',bmi?(parseFloat(bmi)>30?'twa':'tok'):'ter',bmi?(parseFloat(bmi)>30?'△ Sovrappeso':'✔ Normale'):'—'],
+  ];
+  document.getElementById('stbl').innerHTML=`
+    <thead><tr><th>Parametro</th><th>Valore</th><th>Stato</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr><td>${r[0]}</td><td class="tv">${r[1]}</td><td class="${r[2]}">${r[3]}</td></tr>`).join('')}</tbody>`;
+}
+
+function fmtHM(sec){const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);return`${h}h ${m.toString().padStart(2,'0')}m`;}
+
+function resetAll(){
+  DB=null; _currentExamSnapshot=null;
+  Object.values(charts).forEach(c=>c.destroy());
+  collectedFiles.clear();
+  document.getElementById('fileLog').style.display='none';
+  document.getElementById('btnProceed').style.display='none';
+  document.getElementById('fileLogList').innerHTML='';
+  document.getElementById('secUpload').style.display='block';
+  document.getElementById('secPatient').style.display='none';
+  document.getElementById('secResults').style.display='none';
+  document.getElementById('secProgress').style.display='none';
+  document.getElementById('hdev').style.display='none';
+  // Reset barra decisione
+  document.getElementById('decBtns').style.display='flex';
+  document.getElementById('decDone').style.display='none';
+  document.getElementById('finputFiles').value='';
+  document.getElementById('finputFolder').value='';
+  ['fCognome','fNome','fNascita','fSesso','fEta','fPeso','fAltezza','fCollo','fVita','fPaRip','fPaRis','fNote','fMedico']
+    .forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.classList.remove('pre');}});
+}
+
+// ── Inizializzazione: mostra solo la sezione upload ──
+window.addEventListener('load', ()=>{
+  document.getElementById('secUpload').style.display='block';
+  document.getElementById('secPatient').style.display='none';
+});
+
+// ─────────────────────────────────────────
+// ARCHIVIO — localStorage (funziona ovunque)
+// ─────────────────────────────────────────
+const ARCHIVE_KEY = 'psg_archive_v1';
+
+function archiveLoad(){
+  try { return JSON.parse(localStorage.getItem(ARCHIVE_KEY)||'[]'); }
+  catch(e){ return []; }
+}
+
+function archiveSave(data){
+  try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(data)); }
+  catch(e){ console.warn('Archive save error:', e); }
+}
+
+function archiveAddOrUpdate(record){
+  const data = archiveLoad();
+  const idx = data.findIndex(r =>
+    r.guid === record.guid ||
+    (r.cognome === record.cognome && r.startTime === record.startTime)
+  );
+  if(idx >= 0) data[idx] = record;
+  else data.unshift(record);
+  archiveSave(data);
+}
+
+function archiveDelete(guid){
+  const data = archiveLoad().filter(r => r.guid !== guid);
+  archiveSave(data);
+  _archiveData = data;
+  renderArchive(data, _archiveFilter);
+}
+
+// ─────────────────────────────────────────
+// DECISIONE ESAME
+// ─────────────────────────────────────────
+let _currentExamSnapshot = null;
+
+function setExamSnapshot(data){ _currentExamSnapshot = data; }
+
+function decideExam(decision){
+  if(!_currentExamSnapshot) return;
+  const snap = {..._currentExamSnapshot, decision, decidedAt: new Date().toISOString()};
+  // Aggiorna anche snapshot corrente così riaprendo archivio è già aggiornato
+  _currentExamSnapshot = snap;
+  archiveAddOrUpdate(snap);
+
+  // Aggiorna UI
+  document.getElementById('decBtns').style.display = 'none';
+  const done = document.getElementById('decDone');
+  done.style.display = 'inline-block';
+  if(decision === 'accepted'){
+    done.className = 'dec-done accepted';
+    done.textContent = '✓ Esame accettato — salvato in archivio';
+  } else {
+    done.className = 'dec-done rejected';
+    done.textContent = '✗ Esame rifiutato — salvato in archivio';
+  }
+}
+
+// ─────────────────────────────────────────
+// ARCHIVIO — UI
+// ─────────────────────────────────────────
+let _archiveData = [];
+let _archiveFilter = 'all';
+
+function openArchive(){
+  _archiveData = archiveLoad();
+  renderArchive(_archiveData, _archiveFilter);
+  document.getElementById('secArchive').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeArchive(){
+  document.getElementById('secArchive').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function filterArchive(f, btn){
+  _archiveFilter = f;
+  document.querySelectorAll('.arch-filter').forEach(b=>b.classList.remove('act'));
+  btn.classList.add('act');
+  renderArchive(_archiveData, f);
+}
+
+function renderArchive(data, filter){
+  const filtered = filter === 'all' ? data
+    : filter === 'pending' ? data.filter(r=>!r.decision)
+    : data.filter(r => r.decision === filter);
+
+  const acc  = data.filter(r=>r.decision==='accepted').length;
+  const rej  = data.filter(r=>r.decision==='rejected').length;
+  const pend = data.filter(r=>!r.decision).length;
+  document.getElementById('archCount').innerHTML =
+    `<span style="color:var(--grn)">${acc} accettati</span> &nbsp;·&nbsp; ` +
+    `<span style="color:var(--red)">${rej} rifiutati</span> &nbsp;·&nbsp; ` +
+    `<span style="color:var(--ylw)">${pend} in sospeso</span> &nbsp;·&nbsp; ` +
+    `<span style="color:var(--muted)">${data.length} totali</span>`;
+
+  const cont = document.getElementById('archContent');
+  if(!filtered.length){
+    cont.innerHTML = `<div class="arch-empty">Nessun esame in archivio${filter!=='all'?' per questo filtro':''}.</div>`;
+    return;
+  }
+
+  const rows = filtered.map(r => {
+    const dec = r.decision || 'pending';
+    const pillLbl = dec==='accepted'?'✓ Accettato': dec==='rejected'?'✗ Rifiutato':'⏳ In sospeso';
+    const sc = r.score>=80?'hi': r.score>=60?'md':'lo';
+    const ped = r.isPediatric ? ' 🧸' : '';
+    const date = (r.startTime||r.examDate||'—').split('T')[0];
+    const decidedAt = r.decidedAt
+      ? new Date(r.decidedAt).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+      : '—';
+    const safeGuid = (r.guid||'').replace(/'/g,"\\'");
+    return `<tr>
+      <td><b style="color:var(--white)">${r.cognome||'—'} ${r.nome||''}${ped}</b><br>
+        <span style="font-size:11px;color:var(--muted)">${r.nascita||'—'} · ${r.sesso==='M'?'M':r.sesso==='F'?'F':'—'}${r.age?' · '+r.age+' anni':''}</span></td>
+      <td class="mono">${date}</td>
+      <td class="mono">${r.device||'YH-600B'}${r.devNum?' #'+r.devNum:''}</td>
+      <td><span class="arch-score ${sc}">${r.score!=null?r.score:'—'}/100</span></td>
+      <td class="mono" style="font-size:11px">${r.totalH||'—'}h · SpO₂ ${r.spo2Mean||'—'}% · ODI ${r.odi||'—'}<br>
+        <span style="font-size:10px;color:var(--muted)">${r.sleepH||'—'}h sonno · ${r.qualLabel||'—'}</span></td>
+      <td><span class="arch-pill ${dec}">${pillLbl}</span></td>
+      <td class="mono" style="font-size:10px;color:var(--muted)">${decidedAt}</td>
+      <td><button class="btn-arch-del" onclick="archiveDelete('${safeGuid}')" title="Elimina">🗑</button></td>
+    </tr>`;
+  }).join('');
+
+  cont.innerHTML = `
+    <table class="arch-table">
+      <thead><tr>
+        <th>Paziente</th><th>Data esame</th><th>Dispositivo</th>
+        <th>Score</th><th>Parametri principali</th><th>Decisione</th><th>Deciso il</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// Chiudi con ESC
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeArchive(); });
+</script>
+</body>
+</html>
