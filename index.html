@@ -117,13 +117,18 @@
     box-shadow:inset 0 1px 0 #fff;
   }
   .meta .invalid-measurement-badge{
-    display:inline-flex; align-items:center; min-height:32px; padding:5px 11px;
+    display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:32px; padding:4px 11px;
     border:1px solid #d42828; border-radius:3px; background:#fff0f0;
-    color:#a10d0d; font-size:14px; font-weight:800; letter-spacing:.1px;
+    color:#a10d0d; font-size:14px; font-weight:800; letter-spacing:.1px; line-height:1.15;
     box-shadow:inset 0 1px 0 #fff;
     cursor:pointer; font-family:inherit;
   }
   .meta .invalid-measurement-badge:hover{ background:#ffe2e2; }
+  .meta .invalid-measurement-badge .badge-hint{
+    font-size:9px; font-weight:600; letter-spacing:.2px; color:#c23a3a;
+    text-transform:none; margin-top:1px;
+  }
   .quality-modal-overlay{
     position:fixed; inset:0; background:rgba(10,30,45,.45);
     display:flex; align-items:center; justify-content:center;
@@ -276,7 +281,7 @@
     <div id="qualityModalOverlay" class="quality-modal-overlay hidden">
       <div class="quality-modal">
         <div class="quality-modal-header">
-          <h3>Misurazione non accettabile.</h3>
+          <h3>Misurazione non accettabile</h3>
           <button type="button" class="quality-modal-close" id="qualityModalCloseBtn" aria-label="Chiudi">&times;</button>
         </div>
         <div class="quality-modal-body" id="qualityModalBody"></div>
@@ -873,7 +878,7 @@
     if (qualityIssues.length === 0){
       parts.push('<span class="valid-measurement-badge">MISURAZIONE VALIDA</span>');
     } else {
-      parts.push('<button type="button" id="invalidMeasurementBtn" class="invalid-measurement-badge">MISURAZIONE NON ACCETTABILE</button>');
+      parts.push('<button type="button" id="invalidMeasurementBtn" class="invalid-measurement-badge">MISURAZIONE NON ACCETTABILE<span class="badge-hint">clicca per info</span></button>');
     }
     metaLine.innerHTML = parts.join('');
     var invalidBtn = document.getElementById('invalidMeasurementBtn');
