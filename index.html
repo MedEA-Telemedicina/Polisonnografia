@@ -110,6 +110,44 @@
     background:#fff0f0; border-color:#d42828; color:#a10d0d;
   }
   .meta .duration-badge.short-recording b{ color:#c00000; }
+  .meta .valid-measurement-badge{
+    display:inline-flex; align-items:center; min-height:32px; padding:5px 11px;
+    border:1px solid #1c8a3c; border-radius:3px; background:#eafff0;
+    color:#0d6b28; font-size:14px; font-weight:800; letter-spacing:.1px;
+    box-shadow:inset 0 1px 0 #fff;
+  }
+  .meta .invalid-measurement-badge{
+    display:inline-flex; align-items:center; min-height:32px; padding:5px 11px;
+    border:1px solid #d42828; border-radius:3px; background:#fff0f0;
+    color:#a10d0d; font-size:14px; font-weight:800; letter-spacing:.1px;
+    box-shadow:inset 0 1px 0 #fff;
+    cursor:pointer; font-family:inherit;
+  }
+  .meta .invalid-measurement-badge:hover{ background:#ffe2e2; }
+  .quality-modal-overlay{
+    position:fixed; inset:0; background:rgba(10,30,45,.45);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1000;
+  }
+  .quality-modal-overlay.hidden{ display:none; }
+  .quality-modal{
+    background:#fff; border-radius:6px; max-width:480px; width:92%;
+    box-shadow:0 10px 40px rgba(0,0,0,.3);
+    font-family:var(--sans); color:#17394f;
+  }
+  .quality-modal-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px; border-bottom:1px solid #eee;
+  }
+  .quality-modal-header h3{ margin:0; font-size:16px; color:#a10d0d; }
+  .quality-modal-close{
+    border:none; background:transparent; font-size:20px; line-height:1; cursor:pointer;
+    color:#666; padding:0 4px;
+  }
+  .quality-modal-close:hover{ color:#000; }
+  .quality-modal-body{ padding:16px 18px; font-size:13px; line-height:1.5; }
+  .quality-modal-body ul{ margin:6px 0 0 0; padding-left:20px; }
+  .quality-modal-body li{ margin-bottom:6px; color:#a10d0d; }
   .topbar-spacer{ display:none; }
   @media (max-width: 900px){
     header.topbar{ grid-template-columns:1fr auto; row-gap:7px; }
@@ -159,6 +197,7 @@
   .lane-range{ font-size:10px; color:var(--muted-2); font-family: var(--mono); margin-top:3px; text-align:center; }
   .lane canvas{ display:block; flex:1; width:100%; }
   .hypno .lane-label{ background:#d4e4f2; }
+  .lane-label.quality-ok{ background:#bdf2c8; }
 
   #timeAxisWrap{
     display:flex; border-top: 1px solid var(--border); background: var(--panel);
@@ -234,6 +273,15 @@
     </header>
 
     <div id="patientBar" class="hidden"></div>
+    <div id="qualityModalOverlay" class="quality-modal-overlay hidden">
+      <div class="quality-modal">
+        <div class="quality-modal-header">
+          <h3>Misurazione non accettabile</h3>
+          <button type="button" class="quality-modal-close" id="qualityModalCloseBtn" aria-label="Chiudi">&times;</button>
+        </div>
+        <div class="quality-modal-body" id="qualityModalBody"></div>
+      </div>
+    </div>
 
     <div class="toolbar">
       <div class="group">
@@ -661,6 +709,70 @@
   // ---------------------------------------------------------------
   var laneCanvases = []; // {ctx, canvas, channel}
 
+  // Canali per cui evidenziare la cella in verde se la traccia è "buona":
+  // presente per almeno 4 ore e non piatta (fissa a 0 / assente).
+  var QUALITY_CHECK_LABELS = /^(Flow|Chest|Abdomen|Chest\/Abdomen|SpO2)$/;
+  var QUALITY_MIN_SECONDS = 4 * 3600; // 4 ore
+
+  // Calcola i secondi "non piatti" (segnale realmente presente, non solo rumore residuo) di un canale.
+  // Un semplice controllo "valore diverso da zero" non basta: un sensore scollegato produce comunque
+  // un minimo di rumore elettrico mai esattamente a 0, quindi risulterebbe sempre "non piatto".
+  // Si valuta invece l'ampiezza del segnale (max-min) su finestre di 30s: se l'escursione resta sotto
+  // una soglia minima rispetto al fondo scala del canale, la finestra è considerata piatta/assente.
+  function channelNonFlatSeconds(ch){
+    if (!ch || !ch.values || !ch.freq) return 0;
+    var values = ch.values, n = ch.n || values.length, freq = ch.freq;
+    if (!n) return 0;
+    var isSpo2 = /^spo2$/i.test(ch.label);
+    var windowSeconds = 30;
+    var windowSamples = Math.max(1, Math.round(windowSeconds * freq));
+    var scaleRange = (ch.fixed && ch.fixed.length === 2) ? (ch.fixed[1] - ch.fixed[0]) : 200;
+    var flatnessThreshold = scaleRange * 0.02; // 2% del fondo scala: sotto, si considera piatto/rumore
+    var nonFlatSamples = 0;
+    for (var start = 0; start < n; start += windowSamples){
+      var end = Math.min(n, start + windowSamples);
+      var min = Infinity, max = -Infinity, allZero = true;
+      for (var i = start; i < end; i++){
+        var v = values[i];
+        if (v !== v || v === null || v === undefined) continue; // NaN/mancante
+        if (v !== 0) allZero = false;
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+      var windowLen = end - start;
+      var windowIsGood = isSpo2 ? !allZero : (max - min) >= flatnessThreshold;
+      if (windowIsGood) nonFlatSamples += windowLen;
+    }
+    return nonFlatSamples / freq;
+  }
+
+  function isChannelQualityOk(ch){
+    if (!ch || !ch.values || !ch.freq || !QUALITY_CHECK_LABELS.test(ch.label)) return false;
+    return channelNonFlatSeconds(ch) >= QUALITY_MIN_SECONDS;
+  }
+
+  // Restituisce l'elenco dei motivi per cui la misurazione non è valida (array di stringhe), vuoto se valida.
+  function getQualityIssues(){
+    var issues = [];
+    var isShortRecording = state.totalDuration < QUALITY_MIN_SECONDS;
+    if (isShortRecording){
+      issues.push('La registrazione dura ' + formatHMS(state.totalDuration) + ', inferiore alle 4 ore richieste.');
+    }
+    var qualityLabels = ['Flow', 'Chest/Abdomen', 'SpO2'];
+    qualityLabels.forEach(function(label){
+      var ch = state.channels.filter(function(c){ return c.label === label; })[0];
+      if (!ch){
+        issues.push('Canale "' + label + '" non presente nella registrazione.');
+        return;
+      }
+      var nonFlatSeconds = channelNonFlatSeconds(ch);
+      if (nonFlatSeconds < QUALITY_MIN_SECONDS){
+        issues.push('Traccia "' + label + '" presente/valida per solo ' + formatHMS(nonFlatSeconds) + ' (piatta o assente per il resto), richieste almeno 4 ore.');
+      }
+    });
+    return issues;
+  }
+
   function layoutLanes(){
     lanesEl.innerHTML = "";
     laneCanvases = [];
@@ -694,8 +806,9 @@
       lane.className = 'lane';
       lane.style.height = channelH + 'px';
       var rangeTxt = ch.sensitivity ? String(ch.sensitivity) : (ch.fixed ? (ch.fixed[1] + (ch.unit? ' '+ch.unit:'')) : '');
+      var labelClass = 'lane-label' + (isChannelQualityOk(ch) ? ' quality-ok' : '');
       lane.innerHTML =
-        '<div class="lane-label">' +
+        '<div class="'+labelClass+'">' +
           '<div class="lane-name" style="color:'+ch.color+'">' + escapeHtml(ch.label) + '</div>' +
           '<div class="lane-unit">' + (ch.unit || '&nbsp;') + '</div>' +
           '<div class="lane-range">' + rangeTxt + '</div>' +
@@ -756,8 +869,50 @@
     if (footerInfo) footerInfo.textContent = isShortRecording ? 'Attenzione: registrazione inferiore a 4 ore' : 'Durata registrazione valida';
     if (state.deviceModel) parts.push('<span>Dispositivo: <b>' + escapeHtml(state.deviceModel) + '</b></span>');
     parts.push('<span>Canali: <b>' + state.channels.length + '</b></span>');
+    var qualityIssues = getQualityIssues();
+    if (qualityIssues.length === 0){
+      parts.push('<span class="valid-measurement-badge">MISURAZIONE VALIDA</span>');
+    } else {
+      parts.push('<button type="button" id="invalidMeasurementBtn" class="invalid-measurement-badge">MISURAZIONE NON ACCETTABILE</button>');
+    }
     metaLine.innerHTML = parts.join('');
+    var invalidBtn = document.getElementById('invalidMeasurementBtn');
+    if (invalidBtn){
+      invalidBtn.addEventListener('click', function(){ showQualityIssuesModal(qualityIssues); });
+    }
   }
+
+  function showQualityIssuesModal(issues){
+    var overlay = document.getElementById('qualityModalOverlay');
+    var body = document.getElementById('qualityModalBody');
+    if (!overlay || !body) return;
+    var listHtml = '<p>La misurazione non soddisfa i criteri minimi di validità:</p><ul>' +
+      issues.map(function(i){ return '<li>' + escapeHtml(i) + '</li>'; }).join('') + '</ul>';
+    body.innerHTML = listHtml;
+    overlay.classList.remove('hidden');
+  }
+
+  function hideQualityIssuesModal(){
+    var overlay = document.getElementById('qualityModalOverlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
+  (function initQualityModalCloseHandlers(){
+    var overlay = document.getElementById('qualityModalOverlay');
+    var closeBtn = document.getElementById('qualityModalCloseBtn');
+    if (closeBtn) closeBtn.addEventListener('click', hideQualityIssuesModal);
+    if (overlay){
+      overlay.addEventListener('click', function(e){
+        if (e.target === overlay) hideQualityIssuesModal();
+      });
+    }
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape' || e.key === 'Esc'){
+        var ov = document.getElementById('qualityModalOverlay');
+        if (ov && !ov.classList.contains('hidden')) hideQualityIssuesModal();
+      }
+    });
+  })();
 
   function buildPatientBar(){
     if (!state.patient){ patientBar.classList.add('hidden'); return; }
@@ -847,10 +1002,14 @@
     return String(best);
   }
 
-  // mouse wheel zoom + drag to pan on chart area
+  // mouse wheel pans (scrolls) through the trace; it no longer changes the window/zoom
   lanesEl.addEventListener('wheel', function(e){
     e.preventDefault();
-    zoom(e.deltaY > 0 ? 1.25 : 0.8);
+    var step = state.windowSec * 0.2; // scroll by 20% of the current window per wheel notch
+    state.offsetSec += (e.deltaY > 0 ? step : -step);
+    clampOffset();
+    updateSliderRange();
+    render();
   }, { passive:false });
 
   var dragging = false, dragStartX = 0, dragStartOffset = 0;
