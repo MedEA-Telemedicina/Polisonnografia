@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -153,6 +154,41 @@
   .quality-modal-body{ padding:16px 18px; font-size:13px; line-height:1.5; }
   .quality-modal-body ul{ margin:6px 0 0 0; padding-left:20px; }
   .quality-modal-body li{ margin-bottom:6px; color:#a10d0d; }
+
+  /* Pulsante "Modifica data/ora" agganciato alla riga anagrafica in alto */
+  .meta .edit-date-btn{
+    display:inline-flex; align-items:center; gap:5px;
+    background:#e9f5fc; color:#17394f; border:1px solid #7299b3; border-radius:6px;
+    padding:5px 11px; font-size:11.5px; font-weight:700; letter-spacing:.1px;
+    font-family:var(--sans); cursor:pointer; line-height:1.2;
+    transition: background .12s ease, border-color .12s ease;
+  }
+  .meta .edit-date-btn:hover{ background:#fff; border-color:#3c789d; }
+  .meta .edit-date-btn:active{ transform: translateY(1px); }
+
+  /* Modale "Modifica data/ora avvio registrazione" - stessa base del modale qualità */
+  .edit-date-modal{ max-width:460px; }
+  .edit-date-modal .quality-modal-header h3{ color:#17394f; }
+  .edit-date-hint{ font-size:12.5px; color:#55606b; line-height:1.55; margin:0 0 18px; }
+  .edit-date-row{ display:flex; gap:14px; margin-bottom:6px; }
+  .edit-date-row > div{ flex:1; }
+  .edit-date-row label{ display:block; font-size:12px; font-weight:700; color:#33414f; margin-bottom:6px; }
+  .edit-date-row input[type="date"], .edit-date-row input[type="time"]{
+    width:100%; padding:9px 10px; border:1px solid #b7c3ce; border-radius:7px;
+    font-size:13.5px; font-family:var(--sans); color:var(--text);
+  }
+  .edit-date-submit{ width:100%; margin-top:14px; }
+  .edit-date-submit:disabled{ background:#a9b7c4; cursor:not-allowed; }
+  .edit-date-status{ margin-top:14px; font-size:12.5px; line-height:1.6; white-space:pre-wrap; }
+  .edit-date-status .ok{ color:#0f7a3d; }
+  .edit-date-status .err{ color:#b3261e; }
+  .edit-date-status .info{ color:#55606b; }
+  .edit-date-status a.download-link{
+    display:inline-block; margin-top:10px; background:#0f7a3d; color:#fff;
+    text-decoration:none; padding:10px 18px; border-radius:8px; font-weight:700; font-size:13px;
+  }
+  .edit-date-status a.download-link:hover{ background:#0c6631; }
+
   .topbar-spacer{ display:none; }
   @media (max-width: 900px){
     header.topbar{ grid-template-columns:1fr auto; row-gap:7px; }
@@ -285,6 +321,30 @@
           <button type="button" class="quality-modal-close" id="qualityModalCloseBtn" aria-label="Chiudi">&times;</button>
         </div>
         <div class="quality-modal-body" id="qualityModalBody"></div>
+      </div>
+    </div>
+
+    <div id="editDateModalOverlay" class="quality-modal-overlay hidden">
+      <div class="quality-modal edit-date-modal">
+        <div class="quality-modal-header">
+          <h3>Modifica data/ora avvio registrazione</h3>
+          <button type="button" class="quality-modal-close" id="editDateModalCloseBtn" aria-label="Chiudi">&times;</button>
+        </div>
+        <div class="quality-modal-body">
+          <p class="edit-date-hint">Corregge la data/ora di avvio sia nel database dell'esame (PersonalDB) sia nei dati grezzi (Signal.time) e genera una nuova cartella .zip da scaricare. L'elaborazione avviene interamente nel browser, sul file originariamente caricato.</p>
+          <div class="edit-date-row">
+            <div>
+              <label for="editNewDate">Nuova data</label>
+              <input type="date" id="editNewDate">
+            </div>
+            <div>
+              <label for="editNewTime">Nuova ora</label>
+              <input type="time" id="editNewTime" step="1">
+            </div>
+          </div>
+          <button type="button" class="btn primary edit-date-submit" id="editDateProcessBtn">Elabora e scarica cartella aggiornata</button>
+          <div id="editDateStatus" class="edit-date-status"></div>
+        </div>
       </div>
     </div>
 
@@ -436,6 +496,7 @@
   function handleFile(file){
     dropErr.style.display = 'none';
     pickBtn.textContent = "Lettura in corso…";
+    state.rawFile = file; // conservato per poter rigenerare lo zip da "Modifica data/ora"
     JSZip.loadAsync(file).then(function(zip){
       return parseZip(zip);
     }).then(function(){
@@ -868,6 +929,7 @@
         parts.push('<span>Scaricato il: <b>' + formatDateTime(state.downloadDate) + '</b></span>');
       }
     }
+    parts.push('<button type="button" id="editStartDateBtn" class="edit-date-btn">✏️ Modifica data/ora</button>');
     var isShortRecording = state.totalDuration < (4 * 60 * 60);
     parts.push('<span class="duration-badge' + (isShortRecording ? ' short-recording' : '') + '">Durata registrazione: <b>' + formatHMS(state.totalDuration) + '</b>' + (isShortRecording ? ' — inferiore a 4 ore' : '') + '</span>');
     var footerInfo = document.getElementById('footerInfo');
@@ -884,6 +946,10 @@
     var invalidBtn = document.getElementById('invalidMeasurementBtn');
     if (invalidBtn){
       invalidBtn.addEventListener('click', function(){ showQualityIssuesModal(qualityIssues); });
+    }
+    var editBtn = document.getElementById('editStartDateBtn');
+    if (editBtn){
+      editBtn.addEventListener('click', openEditDateModal);
     }
   }
 
@@ -915,6 +981,237 @@
       if (e.key === 'Escape' || e.key === 'Esc'){
         var ov = document.getElementById('qualityModalOverlay');
         if (ov && !ov.classList.contains('hidden')) hideQualityIssuesModal();
+      }
+    });
+  })();
+
+  // ---------------------------------------------------------------
+  // Modifica data/ora avvio registrazione
+  // Rielabora, sul file .zip originale conservato in state.rawFile,
+  // sia il database PersonalDB (StartTime/FirstDate/LastDate) sia
+  // l'intestazione binaria SD_RawData/Signal.time, poi propone il
+  // download della cartella aggiornata.
+  // ---------------------------------------------------------------
+  function pad2(n){ return String(n).padStart(2, '0'); }
+
+  function editDateParseDateStr(str){
+    var m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+    if (!m) return null;
+    return { y:+m[1], mo:+m[2], da:+m[3], ho:+m[4], mi:+m[5], se:+m[6] };
+  }
+  function editDateFormatDateStr(d){
+    return d.y + '-' + pad2(d.mo) + '-' + pad2(d.da) + ' ' + pad2(d.ho) + ':' + pad2(d.mi) + ':' + pad2(d.se);
+  }
+  function editDateMake7BytePattern(d){
+    var b = new Uint8Array(7);
+    b[0] = d.y & 0xff; b[1] = (d.y >> 8) & 0xff;
+    b[2] = d.mo; b[3] = d.da; b[4] = d.ho; b[5] = d.mi; b[6] = d.se;
+    return b;
+  }
+  function editDateFindAllOccurrences(haystack, needle){
+    var results = [];
+    var n = needle.length;
+    var limit = haystack.length - n;
+    outer:
+    for (var i = 0; i <= limit; i++){
+      for (var j = 0; j < n; j++){ if (haystack[i+j] !== needle[j]) continue outer; }
+      results.push(i);
+    }
+    return results;
+  }
+
+  // Riusa lo stesso modulo sql.js già usato per leggere PersonalDB al caricamento.
+  var editDateSqlPromise = null;
+  function getEditDateSQL(){
+    if (editDateSqlPromise) return editDateSqlPromise;
+    editDateSqlPromise = loadSqlJs().then(function(initSqlJs){
+      return initSqlJs({ locateFile: function(f){ return "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/" + f; } });
+    });
+    return editDateSqlPromise;
+  }
+
+  function openEditDateModal(){
+    var overlay = document.getElementById('editDateModalOverlay');
+    var statusEl = document.getElementById('editDateStatus');
+    var processBtn = document.getElementById('editDateProcessBtn');
+    if (!overlay) return;
+    statusEl.innerHTML = '';
+    processBtn.disabled = false;
+    processBtn.textContent = 'Elabora e scarica cartella aggiornata';
+    var d = state.startDate || new Date();
+    document.getElementById('editNewDate').value = d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
+    document.getElementById('editNewTime').value = pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+    overlay.classList.remove('hidden');
+  }
+
+  function hideEditDateModal(){
+    var overlay = document.getElementById('editDateModalOverlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
+  function editDateLog(msg, cls){
+    var statusEl = document.getElementById('editDateStatus');
+    var line = document.createElement('div');
+    if (cls) line.className = cls;
+    line.textContent = msg;
+    statusEl.appendChild(line);
+  }
+
+  function runEditDateProcess(){
+    var statusEl = document.getElementById('editDateStatus');
+    var processBtn = document.getElementById('editDateProcessBtn');
+    statusEl.innerHTML = '';
+
+    if (!state.rawFile){
+      editDateLog('Errore: il file .zip originale non è più disponibile in questa pagina. Ricarica l\'esame e riprova.', 'err');
+      return;
+    }
+    var newDateVal = document.getElementById('editNewDate').value;
+    var newTimeVal = document.getElementById('editNewTime').value;
+    if (!newDateVal || !newTimeVal){
+      editDateLog('Inserisci sia la data che l\'ora.', 'err');
+      return;
+    }
+
+    var dateParts = newDateVal.split('-').map(Number);
+    var timeParts = newTimeVal.split(':').map(Number);
+    var newParsed = { y:dateParts[0], mo:dateParts[1], da:dateParts[2], ho:timeParts[0]||0, mi:timeParts[1]||0, se:timeParts[2]||0 };
+    var newStr = editDateFormatDateStr(newParsed);
+
+    processBtn.disabled = true;
+    processBtn.textContent = 'Elaborazione in corso…';
+    editDateLog('Nuova data/ora di avvio: ' + newStr, 'info');
+    editDateLog('Rielaborazione della cartella in corso...', 'info');
+
+    var zipRef = null;
+    var oldParsed = null;
+    var personalDbEntry = null;
+
+    state.rawFile.arrayBuffer().then(function(buf){
+      return JSZip.loadAsync(buf);
+    }).then(function(zip){
+      zipRef = zip;
+      personalDbEntry = findEntry(zip, /(^|\/)PersonalDB$/i);
+      if (!personalDbEntry){
+        editDateLog('Errore: non trovo il file "PersonalDB" nello zip originale.', 'err');
+        throw { handled: true };
+      }
+      return getEditDateSQL().then(function(SQL){
+        return personalDbEntry.async('uint8array').then(function(dbBytes){
+          var db = new SQL.Database(dbBytes);
+          try{
+            var res = db.exec("SELECT StartTime FROM PatientBasicInfo LIMIT 1");
+            if (res.length && res[0].values.length){
+              oldParsed = editDateParseDateStr(res[0].values[0][0]);
+            }
+          }catch(e){}
+          if (!oldParsed && state.startDate){
+            oldParsed = {
+              y: state.startDate.getFullYear(), mo: state.startDate.getMonth()+1, da: state.startDate.getDate(),
+              ho: state.startDate.getHours(), mi: state.startDate.getMinutes(), se: state.startDate.getSeconds()
+            };
+          }
+
+          db.run("UPDATE PatientBasicInfo SET StartTime = ?", [newStr]);
+
+          try{
+            var check = db.exec("SELECT FirstDate, LastDate FROM PatientBasicInfo LIMIT 1");
+            if (check.length && oldParsed){
+              var firstDate = check[0].values[0][0], lastDate = check[0].values[0][1];
+              var oldMs = Date.UTC(oldParsed.y, oldParsed.mo-1, oldParsed.da, oldParsed.ho, oldParsed.mi, oldParsed.se);
+              var newMs = Date.UTC(newParsed.y, newParsed.mo-1, newParsed.da, newParsed.ho, newParsed.mi, newParsed.se);
+              var deltaMs = newMs - oldMs;
+              var shiftDateStr = function(str){
+                var p = editDateParseDateStr(str);
+                if (!p) return str;
+                var ms = Date.UTC(p.y, p.mo-1, p.da, p.ho, p.mi, p.se) + deltaMs;
+                var dd = new Date(ms);
+                return editDateFormatDateStr({
+                  y: dd.getUTCFullYear(), mo: dd.getUTCMonth()+1, da: dd.getUTCDate(),
+                  ho: dd.getUTCHours(), mi: dd.getUTCMinutes(), se: dd.getUTCSeconds()
+                });
+              };
+              if (firstDate) db.run("UPDATE PatientBasicInfo SET FirstDate = ?", [shiftDateStr(firstDate)]);
+              if (lastDate) db.run("UPDATE PatientBasicInfo SET LastDate = ?", [shiftDateStr(lastDate)]);
+            }
+          }catch(e){
+            // FirstDate/LastDate non presenti su tutti i modelli di dispositivo - non bloccante
+          }
+
+          var newDbBytes = db.export();
+          db.close();
+          zipRef.file(personalDbEntry.name, newDbBytes);
+          editDateLog('Database interno aggiornato (StartTime → ' + newStr + ').', 'ok');
+
+          var signalTimeEntry = findEntry(zipRef, /(^|\/)SD_RawData\/Signal\.time$/i);
+          var sigStep = Promise.resolve();
+          if (signalTimeEntry && oldParsed){
+            sigStep = signalTimeEntry.async('uint8array').then(function(sigBytes){
+              var oldPattern = editDateMake7BytePattern(oldParsed);
+              var newPattern = editDateMake7BytePattern(newParsed);
+              var occurrences = editDateFindAllOccurrences(sigBytes, oldPattern);
+              if (occurrences.length === 0){
+                editDateLog('Attenzione: timestamp non trovato in Signal.time (formato diverso su questo dispositivo). Il database è comunque stato aggiornato.', 'info');
+              } else {
+                occurrences.forEach(function(off){ sigBytes.set(newPattern, off); });
+                zipRef.file(signalTimeEntry.name, sigBytes);
+                editDateLog('Timestamp aggiornato anche nei dati grezzi (Signal.time), ' + occurrences.length + ' occorrenza/e.', 'ok');
+              }
+            });
+          } else {
+            editDateLog('Attenzione: non trovato SD_RawData/Signal.time nello zip: salto questo passaggio.', 'info');
+          }
+
+          return sigStep.then(function(){
+            editDateLog('Generazione archivio zip aggiornato...', 'info');
+            return zipRef.generateAsync({ type:'blob', compression:'DEFLATE' });
+          });
+        });
+      });
+    }).then(function(blob){
+      var url = URL.createObjectURL(blob);
+      var baseName = (state.rawFile.name || 'polisonnografia.zip').replace(/\.zip$/i, '');
+      var dateTag = newStr.replace(/[: ]/g, '-');
+      var a = document.createElement('a');
+      a.href = url;
+      a.className = 'download-link';
+      a.download = baseName + '_' + dateTag + '.zip';
+      a.textContent = '⬇️ Scarica la cartella aggiornata (.zip)';
+      statusEl.appendChild(a);
+      editDateLog('Fatto! Puoi scaricare lo zip qui sopra.', 'ok');
+
+      // Aggiorna anche la data mostrata nell'anteprima corrente, per coerenza visiva
+      state.startDate = new Date(newParsed.y, newParsed.mo-1, newParsed.da, newParsed.ho, newParsed.mi, newParsed.se);
+      buildMetaLine();
+      render();
+
+      processBtn.disabled = false;
+      processBtn.textContent = 'Elabora e scarica cartella aggiornata';
+    }).catch(function(e){
+      if (!e || !e.handled){
+        editDateLog('Errore durante l\'elaborazione: ' + (e && e.message ? e.message : e), 'err');
+        console.error(e);
+      }
+      processBtn.disabled = false;
+      processBtn.textContent = 'Elabora e scarica cartella aggiornata';
+    });
+  }
+
+  (function initEditDateModalHandlers(){
+    var overlay = document.getElementById('editDateModalOverlay');
+    var closeBtn = document.getElementById('editDateModalCloseBtn');
+    var processBtn = document.getElementById('editDateProcessBtn');
+    if (closeBtn) closeBtn.addEventListener('click', hideEditDateModal);
+    if (processBtn) processBtn.addEventListener('click', runEditDateProcess);
+    if (overlay){
+      overlay.addEventListener('click', function(e){
+        if (e.target === overlay) hideEditDateModal();
+      });
+    }
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape' || e.key === 'Esc'){
+        var ov = document.getElementById('editDateModalOverlay');
+        if (ov && !ov.classList.contains('hidden')) hideEditDateModal();
       }
     });
   })();
