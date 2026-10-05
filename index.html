@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -207,23 +206,23 @@
 
   /* toolbar */
   .toolbar{
-    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-    padding: 10px 18px; border-bottom:1px solid var(--border);
-    background: var(--panel);
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    padding: 3px 12px; border-bottom:1px solid var(--border);
+    background: var(--panel); min-height:0;
   }
-  .toolbar .group{ display:flex; align-items:center; gap:6px; }
+  .toolbar .group{ display:flex; align-items:center; gap:4px; }
   .toolbar select{
     background: var(--panel-2); color:var(--text); border:1px solid var(--border);
-    border-radius:7px; padding:7px 10px; font-family: var(--sans); font-size:12.5px; cursor:pointer;
+    border-radius:5px; padding:2px 6px; font-family: var(--sans); font-size:11.5px; cursor:pointer;
   }
   .navbtn{
     background: var(--panel-2); color:var(--text); border:1px solid var(--border);
-    border-radius:7px; width:32px; height:30px; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    border-radius:5px; width:26px; height:22px; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;
   }
   .navbtn:hover{ background:#fff; border-color:#3c789d; }
   .navbtn:active{ transform: translateY(1px); }
   #posSlider{ flex:1; min-width:160px; accent-color: var(--accent); }
-  #windowLabel{ font-family: var(--mono); font-size:12px; color: var(--muted); min-width:190px; text-align:right; }
+  #windowLabel{ font-family: var(--mono); font-size:11px; color: var(--muted); min-width:190px; text-align:right; }
   .divider{ width:1px; align-self:stretch; background: var(--border); margin: 0 4px; }
 
   /* chart area */
@@ -241,7 +240,8 @@
     display:flex; flex-direction:column; justify-content:center; gap:2px;
     background: #d4e4f2;
   }
-  .lane-name{ font-size:12.5px; font-weight:400; letter-spacing:.2px; text-align:center; }
+  .lane-name{ font-size:12.5px; font-weight:700; font-style:italic; color:#000 !important; letter-spacing:.2px; text-align:center; }
+  .lane-avg{ font-size:11px; font-style:italic; font-weight:400; color:#000; text-align:center; line-height:1.2; }
   .lane-unit{ font-size:10.5px; color:var(--muted); font-family: var(--mono); text-align:center; }
   .lane-range{ font-size:10px; color:var(--muted-2); font-family: var(--mono); margin-top:3px; text-align:center; }
   .lane canvas{ display:block; flex:1; width:100%; }
@@ -404,17 +404,17 @@
   // ---------------------------------------------------------------
   var PALETTE = ["#38bdf8","#facc15","#f87171","#34d399","#c084fc","#fb923c","#60a5fa","#f472b6","#4ade80","#e2e8f0"];
   var CHANNEL_META = {
-    "snore":           { label:"Snore",          unit:"",       fixed:[-100,100], color:"#008000", baseline:1, gain:0.08, sensitivity:200, order:1 },
+    "snore":           { label:"Snore",          title:"Russamento", unit:"",       fixed:[-100,100], color:"#008000", baseline:1, gain:0.08, sensitivity:200, order:1 },
     "cpap":            { label:"CPAP",           unit:"cmH2O",  fixed:[0,20],     color:"#e00000", order:2 },
-    "flow":            { label:"Flow",           unit:"",       fixed:[-100,100], color:"#000000", baseline:127, gain:1, sensitivity:200, order:3 },
-    "nasal flow":      { label:"Flow",           unit:"",       fixed:[-100,100], color:"#000000", baseline:127, gain:1, sensitivity:200, order:3 },
-    "chest/abdomen":   { label:"Chest/Abdomen",  unit:"",       fixed:[-100,100], color:"#000000", baseline:127, gain:1, sensitivity:200, order:4 },
-    "chest":           { label:"Chest",          unit:"",       fixed:[-100,100], color:"#000000", baseline:127, gain:1, sensitivity:200, order:4 },
-    "abdomen":         { label:"Abdomen",        unit:"",       fixed:[-100,100], color:"#000000", baseline:127, gain:1, sensitivity:200, order:4 },
+    "flow":            { label:"Flow",           title:"Flusso respiratorio", unit:"",       fixed:[-100,100], color:"#000000", baseline:127, gain:1, sensitivity:200, order:3 },
+    "nasal flow":      { label:"Flow",           title:"Flusso respiratorio", unit:"",       fixed:[-100,100], color:"#000000", baseline:127, gain:1, sensitivity:200, order:3 },
+    "chest/abdomen":   { label:"Chest/Abdomen",  title:"Espansione toracica", unit:"",       fixed:[-100,100], color:"#000000", baseline:127, gain:1, sensitivity:200, order:4 },
+    "chest":           { label:"Chest",          title:"Espansione toracica", unit:"",       fixed:[-100,100], color:"#000000", baseline:127, gain:1, sensitivity:200, order:4 },
+    "abdomen":         { label:"Abdomen",        title:"Espansione toracica", unit:"",       fixed:[-100,100], color:"#000000", baseline:127, gain:1, sensitivity:200, order:4 },
     "spo2":            { label:"SpO2",           unit:"%",      fixed:[50,100],   color:"#e00000", order:5 },
-    "position":        { label:"Position",       unit:"",       fixed:null,       color:"#000000", categorical:true, order:6 },
-    "pr":              { label:"PR",             unit:"bpm",    fixed:[50,120],   color:"#e00000", order:7 },
-    "pulse":           { label:"PR",             unit:"bpm",    fixed:[50,120],   color:"#e00000", order:7 },
+    "position":        { label:"Position",       title:"Posizione", unit:"",       fixed:null,       color:"#000000", categorical:true, order:7 },
+    "pr":              { label:"PR",             unit:"bpm",    fixed:[0,120],    color:"#e00000", order:6 },
+    "pulse":           { label:"PR",             unit:"bpm",    fixed:[0,120],    color:"#e00000", order:6 },
     "wristwake":       { hidden:true },
     "battery":         { hidden:true }
   };
@@ -618,6 +618,7 @@
             id: def.dataID,
             rawName: def.dataName,
             label: meta.label,
+            title: meta.title || meta.label,
             unit: meta.unit,
             color: meta.color,
             fixed: meta.fixed,
@@ -860,15 +861,16 @@
     if (state.stages){
       var hy = document.createElement('div');
       hy.className = 'lane hypno';
-      hy.style.height = 46 + 'px';
+      hy.style.height = 58 + 'px';
       hy.innerHTML =
-        '<div class="lane-label"><div class="lane-name">Sonno / Veglia</div>' +
+        '<div class="lane-label" style="padding-top:3px;padding-bottom:3px"><div class="lane-name">Sonno / Veglia</div>' +
+        '<div class="lane-avg"></div>' +
         '<div class="lane-unit">epoca 30s</div></div>';
       var cv = document.createElement('canvas');
-      cv.height = 46;
+      cv.height = 58;
       hy.appendChild(cv);
       lanesEl.appendChild(hy);
-      laneCanvases.push({ canvas: cv, ctx: cv.getContext('2d'), hypnogram:true });
+      laneCanvases.push({ canvas: cv, ctx: cv.getContext('2d'), hypnogram:true, avgEl: hy.querySelector('.lane-avg') });
     }
 
     state.channels.forEach(function(ch){
@@ -879,19 +881,21 @@
       var lane = document.createElement('div');
       lane.className = 'lane';
       lane.style.height = channelH + 'px';
+      var hasStat = !!(ch.categorical || /^(spo2|pr)$/i.test(ch.label));
       var rangeTxt = ch.sensitivity ? String(ch.sensitivity) : (ch.fixed ? (ch.fixed[1] + (ch.unit? ' '+ch.unit:'')) : '');
       var labelClass = 'lane-label' + (isChannelQualityOk(ch) ? ' quality-ok' : '');
       lane.innerHTML =
         '<div class="'+labelClass+'">' +
-          '<div class="lane-name" style="color:'+ch.color+'">' + escapeHtml(ch.label) + '</div>' +
-          '<div class="lane-unit">' + (ch.unit || '&nbsp;') + '</div>' +
+          '<div class="lane-name" style="color:'+ch.color+'">' + escapeHtml(ch.title || ch.label) + '</div>' +
+          (hasStat ? '<div class="lane-avg"></div>' : '') +
+          (ch.categorical ? '' : '<div class="lane-unit">' + (ch.unit || '&nbsp;') + '</div>') +
           '<div class="lane-range">' + rangeTxt + '</div>' +
         '</div>';
       var cv = document.createElement('canvas');
       cv.height = channelH;
       lane.appendChild(cv);
       lanesEl.appendChild(lane);
-      laneCanvases.push({ canvas: cv, ctx: cv.getContext('2d'), channel: ch });
+      laneCanvases.push({ canvas: cv, ctx: cv.getContext('2d'), channel: ch, avgEl: lane.querySelector('.lane-avg') });
     });
 
     resizeCanvases();
@@ -1376,8 +1380,48 @@
     laneCanvases.forEach(function(lc){
       if (lc.hypnogram) drawHypnogram(lc);
       else drawChannelLane(lc);
+      updateLaneStat(lc);
     });
     drawTimeAxis();
+  }
+
+  var POSITION_IT = { 0:"incerta", 1:"prona", 2:"supina", 3:"seduta", 4:"sinistra", 5:"destra" };
+
+  // Mostra sotto il nome della sezione la media (SpO2, PR) o il valore
+  // prevalente (Sonno/Veglia, Posizione) calcolati sulla finestra visibile.
+  function updateLaneStat(lc){
+    if (!lc.avgEl) return;
+    var txt = "—";
+    var winStart = state.offsetSec, winEnd = state.offsetSec + state.windowSec;
+    if (lc.hypnogram){
+      var cnt = {};
+      (state.stages || []).forEach(function(st){
+        var t0 = st.epoch*30, t1 = t0+30;
+        var ov = Math.min(t1, winEnd) - Math.max(t0, winStart);
+        if (ov > 0) cnt[st.stage] = (cnt[st.stage]||0) + ov;
+      });
+      var names = { 9:"Sonno", 3:"Veglia", 2:"?" }, best = null;
+      Object.keys(cnt).forEach(function(k){ if (best===null || cnt[k] > cnt[best]) best = k; });
+      if (best !== null) txt = "prevalente: " + (names[best] || best);
+    } else if (lc.channel){
+      var ch = lc.channel, freq = ch.freq, vals = ch.values;
+      var a = Math.max(0, Math.floor(winStart*freq)), b = Math.min(ch.n, Math.ceil(winEnd*freq));
+      if (ch.categorical){
+        var c2 = {}, bestK = null;
+        for (var i=a;i<b;i++){ var v = vals[i]; c2[v] = (c2[v]||0)+1; }
+        Object.keys(c2).forEach(function(k){ if (bestK===null || c2[k] > c2[bestK]) bestK = k; });
+        if (bestK !== null) txt = "prevalente: " + (POSITION_IT[bestK] !== undefined ? POSITION_IT[bestK] : bestK);
+      } else {
+        var sum = 0, n = 0, isSpo2 = /^spo2$/i.test(ch.label);
+        for (var j=a;j<b;j++){
+          var x = vals[j];
+          if (x !== x || x <= 0 || (isSpo2 && x > 100)) continue; // scarta zeri/segnale perso
+          sum += x; n++;
+        }
+        if (n) txt = "media: " + Math.round(sum/n) + (ch.unit ? " " + ch.unit : "");
+      }
+    }
+    if (lc.avgEl.textContent !== txt) lc.avgEl.textContent = txt;
   }
 
   function drawChannelLane(lc){
