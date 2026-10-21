@@ -184,6 +184,17 @@
     width:100%; padding:9px 10px; border:1px solid #b7c3ce; border-radius:7px;
     font-size:13.5px; font-family:var(--sans); color:var(--text);
   }
+  .edit-date-row input[type="text"], .edit-date-row input[type="number"]{
+    width:100%; padding:9px 10px; border:1px solid #b7c3ce; border-radius:7px;
+    font-size:13.5px; font-family:var(--sans); color:var(--text);
+  }
+  .edit-patient-modal{ max-width:520px; }
+  #patientBar .edit-patient-btn{
+    display:inline-flex; align-items:center; gap:5px; margin-left:auto;
+    background:#e9f5fc; color:#17394f; border:1px solid #7299b3; border-radius:6px;
+    padding:5px 11px; font-size:11.5px; font-weight:700; font-family:var(--sans); cursor:pointer; line-height:1.2;
+  }
+  #patientBar .edit-patient-btn:hover{ background:#fff; border-color:#3c789d; }
   .edit-date-submit{ width:100%; margin-top:14px; }
   .edit-date-submit:disabled{ background:#a9b7c4; cursor:not-allowed; }
   .edit-date-status{ margin-top:14px; font-size:12.5px; line-height:1.6; white-space:pre-wrap; }
@@ -247,6 +258,7 @@
   .lane canvas{ display:block; flex:1; width:100%; }
   .hypno .lane-label{ background:#d4e4f2; }
   .lane-label.quality-ok{ background:#bdf2c8; }
+  .lane-label.quality-bad{ background:#f7c1c1; }
 
   #timeAxisWrap{
     display:flex; border-top: 1px solid var(--border); background: var(--panel);
@@ -352,6 +364,34 @@
           </div>
           <button type="button" class="btn primary edit-date-submit" id="editDateProcessBtn">Elabora e scarica cartella aggiornata</button>
           <div id="editDateStatus" class="edit-date-status"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="editPatientModalOverlay" class="quality-modal-overlay hidden">
+      <div class="quality-modal edit-date-modal edit-patient-modal">
+        <div class="quality-modal-header">
+          <h3>Modifica dati paziente</h3>
+          <button type="button" class="quality-modal-close" id="editPatientModalCloseBtn" aria-label="Chiudi">&times;</button>
+        </div>
+        <div class="quality-modal-body">
+          <p class="edit-date-hint">Corregge i dati anagrafici nel database dell'esame (PersonalDB) e genera una nuova cartella .zip da scaricare. Il BMI viene ricalcolato da altezza e peso. L'elaborazione avviene interamente nel browser.</p>
+          <div class="edit-date-row">
+            <div><label for="editPatName">Nome e cognome</label><input type="text" id="editPatName" autocomplete="off"></div>
+          </div>
+          <div class="edit-date-row">
+            <div><label for="editPatBirth">Data di nascita</label><input type="date" id="editPatBirth"></div>
+            <div><label for="editPatAge">Età</label><input type="number" id="editPatAge" min="0" max="120" step="1"></div>
+          </div>
+          <div class="edit-date-row">
+            <div><label for="editPatHeight">Altezza (cm)</label><input type="number" id="editPatHeight" min="0" step="0.1"></div>
+            <div><label for="editPatWeight">Peso (kg)</label><input type="number" id="editPatWeight" min="0" step="0.1"></div>
+          </div>
+          <div class="edit-date-row">
+            <div><label for="editPatRemark">Nota</label><input type="text" id="editPatRemark" autocomplete="off"></div>
+          </div>
+          <button type="button" class="btn primary edit-date-submit" id="editPatientProcessBtn">Elabora e scarica cartella aggiornata</button>
+          <div id="editPatientStatus" class="edit-date-status"></div>
         </div>
       </div>
     </div>
@@ -727,7 +767,10 @@
   function bmcDecryptPatientFields(obj){
     BMC_ENCRYPTED_FIELDS.forEach(function(f){
       var decrypted = bmcDecryptFieldHex(obj[f + '_hex']);
-      if (decrypted !== null && decrypted.length > 0) obj[f] = decrypted;
+      if (decrypted !== null && decrypted.length > 0){
+        obj[f] = decrypted;
+        (obj._enc = obj._enc || {})[f] = true; // il campo era cifrato: va ricifrato in scrittura
+      }
       delete obj[f + '_hex'];
     });
     return obj;
@@ -739,7 +782,7 @@
     }).then(function(SQL){
       var db = new SQL.Database(dbBytes);
       try{
-        var pRes = db.exec("SELECT Name, Gender, StartTime, Duration, DeviceModel, Remark, Height, Weight, BMI, Age, hex(Name) AS Name_hex, hex(PatientID) AS PatientID_hex, hex(NHS) AS NHS_hex, hex(MedicalRecordNumber) AS MedicalRecordNumber_hex, hex(Phone) AS Phone_hex, hex(Address) AS Address_hex FROM PatientBasicInfo LIMIT 1");
+        var pRes = db.exec("SELECT Name, Gender, StartTime, Duration, DeviceModel, Remark, Height, Weight, BMI, Age, Birth, hex(Name) AS Name_hex, hex(PatientID) AS PatientID_hex, hex(NHS) AS NHS_hex, hex(MedicalRecordNumber) AS MedicalRecordNumber_hex, hex(Phone) AS Phone_hex, hex(Address) AS Address_hex FROM PatientBasicInfo LIMIT 1");
         if (pRes && pRes[0]){
           var cols = pRes[0].columns, vals = pRes[0].values[0];
           var obj = {};
@@ -788,6 +831,7 @@
   // presente per almeno 4 ore e non piatta (fissa a 0 / assente).
   var QUALITY_CHECK_LABELS = /^(Flow|Chest|Abdomen|Chest\/Abdomen|SpO2)$/;
   var QUALITY_MIN_SECONDS = 4 * 3600; // 4 ore
+  var SPO2_VALID_MIN = 50, SPO2_VALID_MAX = 100; // intervallo fisiologico: fuori (0, 127...) = nessun segnale
 
   // Calcola i secondi "non piatti" (segnale realmente presente, non solo rumore residuo) di un canale.
   // Un semplice controllo "valore diverso da zero" non basta: un sensore scollegato produce comunque
@@ -806,16 +850,18 @@
     var nonFlatSamples = 0;
     for (var start = 0; start < n; start += windowSamples){
       var end = Math.min(n, start + windowSamples);
-      var min = Infinity, max = -Infinity, allZero = true;
+      var min = Infinity, max = -Infinity, spo2Valid = 0;
       for (var i = start; i < end; i++){
         var v = values[i];
         if (v !== v || v === null || v === undefined) continue; // NaN/mancante
-        if (v !== 0) allZero = false;
+        if (v >= SPO2_VALID_MIN && v <= SPO2_VALID_MAX) spo2Valid++;
         if (v < min) min = v;
         if (v > max) max = v;
       }
       var windowLen = end - start;
-      var windowIsGood = isSpo2 ? !allZero : (max - min) >= flatnessThreshold;
+      // SpO2: il dispositivo scrive 0 (segnale perso) o 127 (sensore assente) quando non c'è traccia.
+      // La finestra è buona solo se almeno metà dei campioni è un valore fisiologico (50-100 %).
+      var windowIsGood = isSpo2 ? (spo2Valid >= windowLen * 0.5) : (max - min) >= flatnessThreshold;
       if (windowIsGood) nonFlatSamples += windowLen;
     }
     return nonFlatSamples / freq;
@@ -883,7 +929,8 @@
       lane.style.height = channelH + 'px';
       var hasStat = !!(ch.categorical || /^(spo2|pr)$/i.test(ch.label));
       var rangeTxt = ch.sensitivity ? String(ch.sensitivity) : (ch.fixed ? (ch.fixed[1] + (ch.unit? ' '+ch.unit:'')) : '');
-      var labelClass = 'lane-label' + (isChannelQualityOk(ch) ? ' quality-ok' : '');
+      var labelClass = 'lane-label';
+      if (QUALITY_CHECK_LABELS.test(ch.label)) labelClass += isChannelQualityOk(ch) ? ' quality-ok' : ' quality-bad'; // verde = traccia ok, rosso = non accettabile
       lane.innerHTML =
         '<div class="'+labelClass+'">' +
           '<div class="lane-name" style="color:'+ch.color+'">' + escapeHtml(ch.title || ch.label) + '</div>' +
@@ -1203,6 +1250,8 @@
       a.textContent = '⬇️ Scarica la cartella aggiornata (.zip)';
       statusEl.appendChild(a);
       editDateLog('Fatto! Puoi scaricare lo zip qui sopra.', 'ok');
+      // Le modifiche successive (anche dati paziente) partono dallo zip già aggiornato
+      state.rawFile = new File([blob], baseName + '_' + dateTag + '.zip', { type: 'application/zip' });
 
       // Aggiorna anche la data mostrata nell'anteprima corrente, per coerenza visiva
       state.startDate = new Date(newParsed.y, newParsed.mo-1, newParsed.da, newParsed.ho, newParsed.mi, newParsed.se);
@@ -1250,10 +1299,163 @@
     if (p.Weight) bits.push('<span class="patient-field">Peso: <b>' + escapeHtml(formatMeasurement(p.Weight)) + ' kg</b></span>');
     if (p.BMI) bits.push('<span class="patient-field">BMI: <b>' + Number(p.BMI).toFixed(1) + '</b></span>');
     if (p.Remark) bits.push('<span class="patient-note">Nota: <b>' + escapeHtml(p.Remark) + '</b></span>');
-    if (bits.length === 1){ patientBar.classList.add('hidden'); return; }
+    bits.push('<button type="button" id="editPatientBtn" class="edit-patient-btn">✏️ Modifica dati paziente</button>');
     patientBar.innerHTML = bits.join('');
     patientBar.classList.remove('hidden');
+    var epb = document.getElementById('editPatientBtn');
+    if (epb) epb.addEventListener('click', openEditPatientModal);
   }
+
+  // ---------------------------------------------------------------
+  // Modifica dati paziente: riscrive PatientBasicInfo in PersonalDB
+  // (ricifrando il nome se in origine era cifrato) e rigenera lo zip.
+  // ---------------------------------------------------------------
+  function bmcEncryptFieldToBytes(text){
+    var bin = '';
+    for (var i = 0; i < text.length; i++){
+      var c = text.charCodeAt(i);
+      bin += String.fromCharCode(c & 0xff, (c >> 8) & 0xff);
+    }
+    var cipher = forge.cipher.createCipher('3DES-ECB', BMC_3DES_KEY);
+    cipher.start({});
+    cipher.update(forge.util.createBuffer(bin));
+    cipher.finish(); // padding PKCS7 automatico
+    var out = cipher.output.getBytes();
+    var bytes = new Uint8Array(out.length);
+    for (var k = 0; k < out.length; k++) bytes[k] = out.charCodeAt(k);
+    return bytes;
+  }
+
+  function ageFromBirthStr(str){
+    var m = String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    var now = new Date(), age = now.getFullYear() - (+m[1]);
+    if (now.getMonth() + 1 < +m[2] || (now.getMonth() + 1 === +m[2] && now.getDate() < +m[3])) age--;
+    return age >= 0 && age < 130 ? age : null;
+  }
+
+  function openEditPatientModal(){
+    var p = state.patient || {};
+    document.getElementById('editPatientStatus').innerHTML = '';
+    var btn = document.getElementById('editPatientProcessBtn');
+    btn.disabled = false; btn.textContent = 'Elabora e scarica cartella aggiornata';
+    document.getElementById('editPatName').value = p.Name || '';
+    var bm = String(p.Birth || '').match(/^\d{4}-\d{2}-\d{2}/);
+    document.getElementById('editPatBirth').value = bm ? bm[0] : '';
+    document.getElementById('editPatAge').value = p.Age || '';
+    document.getElementById('editPatHeight').value = p.Height ? formatMeasurement(p.Height) : '';
+    document.getElementById('editPatWeight').value = p.Weight ? formatMeasurement(p.Weight) : '';
+    document.getElementById('editPatRemark').value = p.Remark || '';
+    document.getElementById('editPatientModalOverlay').classList.remove('hidden');
+  }
+  function hideEditPatientModal(){
+    document.getElementById('editPatientModalOverlay').classList.add('hidden');
+  }
+  function editPatientLog(msg, cls){
+    var line = document.createElement('div');
+    if (cls) line.className = cls;
+    line.textContent = msg;
+    document.getElementById('editPatientStatus').appendChild(line);
+  }
+
+  function runEditPatientProcess(){
+    var statusEl = document.getElementById('editPatientStatus');
+    var btn = document.getElementById('editPatientProcessBtn');
+    statusEl.innerHTML = '';
+    if (!state.rawFile){
+      editPatientLog('Errore: il file .zip originale non è più disponibile in questa pagina. Ricarica l\'esame e riprova.', 'err');
+      return;
+    }
+    var name = document.getElementById('editPatName').value.trim();
+    var birth = document.getElementById('editPatBirth').value;
+    var age = document.getElementById('editPatAge').value.trim();
+    var height = document.getElementById('editPatHeight').value.trim();
+    var weight = document.getElementById('editPatWeight').value.trim();
+    var remark = document.getElementById('editPatRemark').value.trim();
+    var h = parseFloat(height), w = parseFloat(weight);
+    if ((height && !(h > 0)) || (weight && !(w > 0))){
+      editPatientLog('Altezza e peso devono essere numeri positivi.', 'err');
+      return;
+    }
+    var bmi = (h > 0 && w > 0) ? (w / Math.pow(h / 100, 2)) : null;
+    var enc = (state.patient && state.patient._enc) || {};
+
+    btn.disabled = true; btn.textContent = 'Elaborazione in corso…';
+    editPatientLog('Rielaborazione della cartella in corso...', 'info');
+
+    var zipRef = null, dbEntry = null;
+    state.rawFile.arrayBuffer().then(function(buf){
+      return JSZip.loadAsync(buf);
+    }).then(function(zip){
+      zipRef = zip;
+      dbEntry = findEntry(zip, /(^|\/)PersonalDB$/i);
+      if (!dbEntry){
+        editPatientLog('Errore: non trovo il file "PersonalDB" nello zip originale.', 'err');
+        throw { handled: true };
+      }
+      return getEditDateSQL().then(function(SQL){
+        return dbEntry.async('uint8array').then(function(dbBytes){
+          var db = new SQL.Database(dbBytes);
+          // Nome: se in origine era cifrato lo si ricifra e si salvano i byte cifrati invariati (blob; hex() li restituisce identici,
+          // un CAST AS TEXT invece li ricodificherebbe e renderebbe il nome indecifrabile)
+          if (enc.Name && name){
+            db.run("UPDATE PatientBasicInfo SET Name = ?", [bmcEncryptFieldToBytes(name + '/BMC')]);
+          } else {
+            db.run("UPDATE PatientBasicInfo SET Name = ?", [name]);
+          }
+          db.run("UPDATE PatientBasicInfo SET Birth = ?, Age = ?, Height = ?, Weight = ?, BMI = ?, Remark = ?", [
+            birth, age,
+            height ? h.toFixed(6) : '', weight ? w.toFixed(6) : '',
+            bmi !== null ? bmi.toFixed(6) : '', remark
+          ]);
+          var newDb = db.export();
+          db.close();
+          zipRef.file(dbEntry.name, newDb);
+          editPatientLog('Database interno aggiornato (dati paziente).', 'ok');
+          editPatientLog('Generazione archivio zip aggiornato...', 'info');
+          return zipRef.generateAsync({ type:'blob', compression:'DEFLATE' });
+        });
+      });
+    }).then(function(blob){
+      var baseName = (state.rawFile.name || 'polisonnografia.zip').replace(/\.zip$/i, '');
+      var fileName = baseName + '_paziente.zip';
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.className = 'download-link';
+      a.download = fileName;
+      a.textContent = '⬇️ Scarica la cartella aggiornata (.zip)';
+      statusEl.appendChild(a);
+      editPatientLog('Fatto! Puoi scaricare lo zip qui sopra.', 'ok');
+      // Le modifiche successive (anche data/ora) partono dallo zip già aggiornato
+      state.rawFile = new File([blob], fileName, { type: 'application/zip' });
+      var P = state.patient || (state.patient = {});
+      P.Name = name; P.Birth = birth; P.Age = age; P.Height = height; P.Weight = weight;
+      P.BMI = bmi !== null ? bmi : ''; P.Remark = remark;
+      buildPatientBar();
+      btn.disabled = false; btn.textContent = 'Elabora e scarica cartella aggiornata';
+    }).catch(function(e){
+      if (!e || !e.handled){
+        editPatientLog('Errore durante l\'elaborazione: ' + (e && e.message ? e.message : e), 'err');
+        console.error(e);
+      }
+      btn.disabled = false; btn.textContent = 'Elabora e scarica cartella aggiornata';
+    });
+  }
+
+  (function initEditPatientModalHandlers(){
+    var overlay = document.getElementById('editPatientModalOverlay');
+    document.getElementById('editPatientModalCloseBtn').addEventListener('click', hideEditPatientModal);
+    document.getElementById('editPatientProcessBtn').addEventListener('click', runEditPatientProcess);
+    overlay.addEventListener('click', function(e){ if (e.target === overlay) hideEditPatientModal(); });
+    document.addEventListener('keydown', function(e){
+      if ((e.key === 'Escape' || e.key === 'Esc') && !overlay.classList.contains('hidden')) hideEditPatientModal();
+    });
+    var birthEl = document.getElementById('editPatBirth');
+    birthEl.addEventListener('change', function(){
+      var a = ageFromBirthStr(birthEl.value);
+      if (a !== null) document.getElementById('editPatAge').value = a;
+    });
+  })();
 
   window.addEventListener('resize', function(){
     if (!viewer.classList.contains('active')) return;
@@ -1415,7 +1617,7 @@
         var sum = 0, n = 0, isSpo2 = /^spo2$/i.test(ch.label);
         for (var j=a;j<b;j++){
           var x = vals[j];
-          if (x !== x || x <= 0 || (isSpo2 && x > 100)) continue; // scarta zeri/segnale perso
+          if (x !== x || x <= 0 || (isSpo2 && (x < SPO2_VALID_MIN || x > SPO2_VALID_MAX))) continue; // scarta zeri/segnale perso
           sum += x; n++;
         }
         if (n) txt = "media: " + Math.round(sum/n) + (ch.unit ? " " + ch.unit : "");
