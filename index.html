@@ -110,6 +110,16 @@
     background:#fff0f0; border-color:#d42828; color:#a10d0d;
   }
   .meta .duration-badge.short-recording b{ color:#c00000; }
+  .meta .sleepwake-badge{
+    display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:5px 11px;
+    border:1px solid #4b7f9e; border-radius:3px; background:#f5fbff;
+    color:#123b57; font-size:14px; font-weight:800; letter-spacing:.1px;
+    box-shadow:inset 0 1px 0 #fff;
+  }
+  .meta .sleepwake-badge b{ font-size:17px; color:#092e49; }
+  .meta .sleepwake-badge .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .meta .sleepwake-badge.sleep .dot{ background:#34d399; }
+  .meta .sleepwake-badge.wake .dot{ background:#f87171; }
   .meta .valid-measurement-badge{
     display:inline-flex; align-items:center; min-height:32px; padding:5px 11px;
     border:1px solid #1c8a3c; border-radius:3px; background:#eafff0;
@@ -1003,6 +1013,15 @@
     parts.push('<button type="button" id="editStartDateBtn" class="edit-date-btn">✏️ Modifica data/ora</button>');
     var isShortRecording = state.totalDuration < (4 * 60 * 60);
     parts.push('<span class="duration-badge' + (isShortRecording ? ' short-recording' : '') + '">Durata registrazione: <b>' + formatHMS(state.totalDuration) + '</b>' + (isShortRecording ? ' — inferiore a 4 ore' : '') + '</span>');
+    if (state.stages && state.stages.length){
+      var sleepEp = 0, wakeEp = 0;
+      state.stages.forEach(function(st){
+        if (st.stage === 9) sleepEp++;
+        else if (st.stage === 3) wakeEp++;
+      });
+      parts.push('<span class="sleepwake-badge sleep"><span class="dot"></span>Sonno: <b>' + formatHMS(sleepEp * 30) + '</b></span>');
+      parts.push('<span class="sleepwake-badge wake"><span class="dot"></span>Veglia: <b>' + formatHMS(wakeEp * 30) + '</b></span>');
+    }
     var footerInfo = document.getElementById('footerInfo');
     if (footerInfo) footerInfo.textContent = isShortRecording ? 'Attenzione: registrazione inferiore a 4 ore' : 'Durata registrazione valida';
     if (state.deviceModel) parts.push('<span>Dispositivo: <b>' + escapeHtml(state.deviceModel) + '</b></span>');
@@ -1655,6 +1674,22 @@
         var mid = (yMin + yMax) / 2;
         var half = (yMax - yMin) * 0.28;
         yMin = mid - half; yMax = mid + half;
+      }
+      // Flussi respiratori (Flow, Chest, Abdomen): se nella finestra visibile il
+      // segnale supera il range standard, il range viene ampliato (simmetrico
+      // attorno al centro) in modo che la traccia compaia per intero.
+      if (/^(Flow|Chest|Abdomen|Chest\/Abdomen)$/.test(ch.label)){
+        var sMin = Infinity, sMax = -Infinity;
+        for (var q=startIdx; q<endIdx; q++){
+          var qv = ch.values[q];
+          if (qv < sMin) sMin = qv;
+          if (qv > sMax) sMax = qv;
+        }
+        if (sMin < yMin || sMax > yMax){
+          var cMid = (yMin + yMax) / 2;
+          var cHalf = Math.max(cMid - sMin, sMax - cMid, (yMax - yMin) / 2) * 1.05;
+          yMin = cMid - cHalf; yMax = cMid + cHalf;
+        }
       }
     } else {
       yMin = Infinity; yMax = -Infinity;
