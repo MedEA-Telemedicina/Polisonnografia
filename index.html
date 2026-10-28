@@ -18,6 +18,9 @@
     --muted: #506070;
     --muted-2: #657483;
     --accent: #1976a8;
+    /* Palette testata (colori da affinare sul logo MedEA se diversi) */
+    --brand: #1976a8; --brand-dark: #0f4f73; --brand-2: #1fa5a0;
+    --ink: #12344a; --line: #d3e2ee;
     --grid: #7d8790;
     --epoch-line: #8a98a500;
     --danger: #d00000;
@@ -78,67 +81,115 @@
   #viewer{ display:none; flex:1; flex-direction:column; min-height:100vh; }
   #viewer.active{ display:flex; }
 
-  /* Barra superiore: impostazione chiara, compatta, stile PolyPro */
+  /* ====== Testata: logo + paziente (con avvio esame) + azioni ====== */
   header.topbar{
-    min-height:50px;
-    border-top:3px solid #5b92b6;
-    border-bottom:1px solid #6f91a9;
-    background:linear-gradient(180deg, #dbeefa 0%, #bed9ec 52%, #a9cce3 100%);
-    padding:8px 16px;
-    display:grid; grid-template-columns:auto minmax(0,1fr) auto;
-    align-items:center; column-gap:16px;
-    color:#17394f;
-    box-shadow:inset 0 1px 0 #f8fdff;
+    position:relative;
+    display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; column-gap:22px;
+    padding:13px 22px 12px;
+    background:#fff; color:var(--ink);
+    border-bottom:1px solid var(--line);
+    box-shadow:0 1px 2px rgba(16,55,85,.05), 0 6px 18px rgba(16,55,85,.06);
   }
-  .brand{ display:flex; align-items:center; margin:0; white-space:nowrap; }
+  header.topbar::before{
+    content:""; position:absolute; left:0; right:0; top:0; height:3px;
+    background:linear-gradient(90deg, var(--brand-dark), var(--brand) 55%, var(--brand-2));
+  }
+  .brand{ grid-column:1; display:flex; align-items:center; margin:0; padding-right:22px; border-right:1px solid var(--line); white-space:nowrap; }
   .brand-logo{ display:block; width:148px; height:42px; object-fit:contain; object-position:left center; }
-  .meta{
-    display:flex; align-items:center; justify-content:center; gap:10px 16px; flex-wrap:wrap;
-    font-size:11.5px; color:#34566b; font-family:var(--sans); line-height:1.15;
+  .topbar-actions{ grid-column:3; display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+  .topbar-actions .btn{ padding:8px 15px; font-size:12.5px; font-weight:700; border-radius:9px; }
+  #editAllBtn{ background:var(--brand); color:#fff; border-color:var(--brand); box-shadow:0 2px 6px rgba(25,118,168,.28); }
+  #editAllBtn:hover{ background:var(--brand-dark); border-color:var(--brand-dark); }
+  #loadOtherBtn{ background:#fff; color:var(--brand-dark); border:1px solid #b9d2e3; }
+  #loadOtherBtn:hover{ background:#f0f7fc; border-color:var(--brand); }
+
+  /* Paziente: anagrafica + data/ora di avvio dell'esame (proprietà del paziente) */
+  #patientBar{ grid-column:2; min-width:0; display:flex; align-items:center; gap:14px; font-family:var(--sans); }
+  #patientBar.hidden{ display:none; }
+  .patient-avatar{
+    flex:0 0 auto; width:46px; height:46px; border-radius:14px;
+    display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg, var(--brand), var(--brand-dark)); color:#fff;
+    font-size:19px; font-weight:800; box-shadow:0 4px 10px rgba(25,118,168,.30);
   }
-  .meta b{ color:#18384d; font-weight:700; }
-  .meta span{ white-space:nowrap; }
-  /* Durata in evidenza: avviso rosso per registrazioni inferiori a 4 ore */
-  .meta .duration-badge{
-    display:inline-flex; align-items:center; min-height:32px; padding:5px 11px;
-    border:1px solid #4b7f9e; border-radius:3px; background:#f5fbff;
-    color:#123b57; font-size:14px; font-weight:800; letter-spacing:.1px;
-    box-shadow:inset 0 1px 0 #fff;
+  .patient-main{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .patient-line{ display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; }
+  .patient-name{ font-size:18px; font-weight:800; color:var(--ink); letter-spacing:-.1px; margin-right:6px; }
+  .patient-chip{
+    display:inline-flex; align-items:baseline; gap:6px; white-space:nowrap;
+    padding:3px 10px; border-radius:999px; background:#f1f7fb; border:1px solid var(--line);
   }
-  .meta .duration-badge b{ margin-left:4px; font-size:17px; color:#092e49; }
-  .meta .duration-badge.short-recording{
-    background:#fff0f0; border-color:#d42828; color:#a10d0d;
+  .patient-chip i{ font-style:normal; font-size:9.5px; font-weight:800; letter-spacing:.7px; text-transform:uppercase; color:#5a7a90; }
+  .patient-chip b{ font-size:13px; font-weight:800; color:var(--ink); }
+  .patient-chip.accent{ background:#e6f3fa; border-color:#a9d0e6; }
+  .patient-chip.accent b{ color:var(--brand-dark); }
+  .patient-chip.stale{ background:#fff1f1; border-color:#f0b4b4; }
+  .patient-chip.stale i, .patient-chip.stale b{ color:#a10d0d; }
+  .patient-warn{
+    font-size:11px; font-weight:800; color:#a10d0d; background:#fff1f1;
+    border:1px solid #f0b4b4; border-radius:999px; padding:3px 10px; letter-spacing:.2px;
   }
-  .meta .duration-badge.short-recording b{ color:#c00000; }
-  .meta .sleepwake-badge{
-    display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:5px 11px;
-    border:1px solid #4b7f9e; border-radius:3px; background:#f5fbff;
-    color:#123b57; font-size:14px; font-weight:800; letter-spacing:.1px;
-    box-shadow:inset 0 1px 0 #fff;
+  .patient-sub{ display:flex; flex-wrap:wrap; align-items:center; gap:2px 8px; font-size:11.5px; color:#5a7a90; }
+  .patient-sub b{ color:#2b4f66; font-weight:700; }
+  .patient-sub .sep{ color:#a8bfce; }
+
+  /* Seconda riga: contatori a sinistra, durata e validità a destra */
+  #infoRow{
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px 24px;
+    padding:10px 22px; background:linear-gradient(180deg,#f5fafe 0%,#eaf3fa 100%);
+    border-bottom:1px solid var(--line);
   }
-  .meta .sleepwake-badge b{ font-size:17px; color:#092e49; }
-  .meta .sleepwake-badge .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
-  .meta .sleepwake-badge.sleep .dot{ background:#34d399; }
-  .meta .sleepwake-badge.wake .dot{ background:#f87171; }
-  .meta .valid-measurement-badge{
-    display:inline-flex; align-items:center; min-height:32px; padding:5px 11px;
-    border:1px solid #1c8a3c; border-radius:3px; background:#eafff0;
-    color:#0d6b28; font-size:14px; font-weight:800; letter-spacing:.1px;
-    box-shadow:inset 0 1px 0 #fff;
+  #infoRow:not(:has(> :not(.hidden))){ display:none; }
+  #examSummary{
+    display:flex; align-items:stretch; justify-content:flex-start; gap:10px; flex-wrap:wrap;
+    font-family:var(--sans); color:#294f67;
   }
-  .meta .invalid-measurement-badge{
+  #examSummary.hidden{ display:none; }
+  #examSummary .sum-caption{
+    align-self:center; color:#5a7a90; font-size:10px; font-weight:800; letter-spacing:.9px;
+    text-transform:uppercase; padding-right:14px; border-right:1px solid #c5d8e6;
+  }
+  #examSummary .sum-tile{
+    display:flex; flex-direction:column; justify-content:center; min-width:136px;
+    padding:6px 14px 6px 12px; border-radius:10px; background:#fff;
+    border:1px solid var(--line); border-left:4px solid var(--brand);
+    box-shadow:0 1px 2px rgba(16,55,85,.05); line-height:1.2;
+  }
+  #examSummary .sum-label{ font-size:11px; font-weight:700; color:#4a6a80; display:flex; align-items:center; gap:6px; }
+  #examSummary .sum-value{ font-size:19px; font-weight:800; color:var(--ink); }
+  #examSummary .sum-sub{ font-size:10.5px; color:#6b8599; }
+  #examSummary .sum-tile.ok{ border-left-color:#1c9a47; }
+  #examSummary .sum-tile.ok .sum-value{ color:#0d6b28; }
+  #examSummary .sum-tile.bad{ border-left-color:#d42828; background:#fffafa; }
+  #examSummary .sum-tile.bad .sum-value{ color:#c00000; }
+  #examSummary .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+  #examSummary .dot.sleep{ background:#34d399; }
+  #examSummary .dot.wake{ background:#f87171; }
+
+  #statusLine{
+    margin-left:auto; display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap;
+    font-family:var(--sans);
+  }
+  #statusLine .duration-badge{
+    display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:10px;
+    background:#fff; border:1px solid var(--line); border-left:4px solid var(--brand);
+    color:#2b4f66; font-size:12.5px; font-weight:700; box-shadow:0 1px 2px rgba(16,55,85,.05);
+  }
+  #statusLine .duration-badge b{ font-size:17px; color:var(--ink); }
+  #statusLine .duration-badge.short-recording{ border-left-color:#d42828; background:#fffafa; color:#a10d0d; }
+  #statusLine .duration-badge.short-recording b{ color:#c00000; }
+  #statusLine .valid-measurement-badge{
+    display:inline-flex; align-items:center; padding:10px 16px; border-radius:10px;
+    background:#e8f8ee; border:1px solid #9bd6ad; color:#0d6b28;
+    font-size:12.5px; font-weight:800; letter-spacing:.5px;
+  }
+  #statusLine .invalid-measurement-badge{
     display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
-    min-height:32px; padding:4px 11px;
-    border:1px solid #d42828; border-radius:3px; background:#fff0f0;
-    color:#a10d0d; font-size:14px; font-weight:800; letter-spacing:.1px; line-height:1.15;
-    box-shadow:inset 0 1px 0 #fff;
-    cursor:pointer; font-family:inherit;
+    padding:6px 16px; border-radius:10px; background:#fff1f1; border:1px solid #f0b4b4; color:#a10d0d;
+    font-size:12.5px; font-weight:800; letter-spacing:.5px; line-height:1.15; cursor:pointer; font-family:inherit;
   }
-  .meta .invalid-measurement-badge:hover{ background:#ffe2e2; }
-  .meta .invalid-measurement-badge .badge-hint{
-    font-size:9px; font-weight:600; letter-spacing:.2px; color:#c23a3a;
-    text-transform:none; margin-top:1px;
-  }
+  #statusLine .invalid-measurement-badge:hover{ background:#ffe2e2; }
+  #statusLine .invalid-measurement-badge .badge-hint{ font-size:9px; font-weight:600; letter-spacing:.2px; color:#c23a3a; text-transform:none; margin-top:1px; }
   .quality-modal-overlay{
     position:fixed; inset:0; background:rgba(10,30,45,.45);
     display:flex; align-items:center; justify-content:center;
@@ -164,25 +215,6 @@
   .quality-modal-body ul{ margin:6px 0 0 0; padding-left:20px; }
   .quality-modal-body li{ margin-bottom:6px; color:#a10d0d; }
 
-  /* Pulsante "Modifica data/ora" agganciato alla riga anagrafica in alto */
-  .meta .edit-date-btn{
-    display:inline-flex; align-items:center; gap:5px;
-    background:#e9f5fc; color:#17394f; border:1px solid #7299b3; border-radius:6px;
-    padding:5px 11px; font-size:11.5px; font-weight:700; letter-spacing:.1px;
-    font-family:var(--sans); cursor:pointer; line-height:1.2;
-    transition: background .12s ease, border-color .12s ease;
-  }
-  .meta .edit-date-btn:hover{ background:#fff; border-color:#3c789d; }
-  .meta .edit-date-btn:active{ transform: translateY(1px); }
-
-  /* Avviso quando la data di avvio registrata è vecchia (≥12 mesi): richiama lo stile "attenzione" già in uso */
-  .meta .stale-date-badge{
-    display:inline-flex; align-items:center;
-    padding:5px 10px; border:1px solid #d42828; border-radius:6px;
-    background:#fff0f0; color:#a10d0d; font-size:11.5px; font-weight:800; letter-spacing:.2px;
-    box-shadow:inset 0 1px 0 #fff;
-  }
-
   /* Modale "Modifica data/ora avvio registrazione" - stessa base del modale qualità */
   .edit-date-modal{ max-width:460px; }
   .edit-date-modal .quality-modal-header h3{ color:#17394f; }
@@ -199,12 +231,6 @@
     font-size:13.5px; font-family:var(--sans); color:var(--text);
   }
   .edit-patient-modal{ max-width:520px; }
-  #patientBar .edit-patient-btn{
-    display:inline-flex; align-items:center; gap:5px; margin-left:auto;
-    background:#e9f5fc; color:#17394f; border:1px solid #7299b3; border-radius:6px;
-    padding:5px 11px; font-size:11.5px; font-weight:700; font-family:var(--sans); cursor:pointer; line-height:1.2;
-  }
-  #patientBar .edit-patient-btn:hover{ background:#fff; border-color:#3c789d; }
   .edit-date-submit{ width:100%; margin-top:14px; }
   .edit-date-submit:disabled{ background:#a9b7c4; cursor:not-allowed; }
   .edit-date-status{ margin-top:14px; font-size:12.5px; line-height:1.6; white-space:pre-wrap; }
@@ -218,12 +244,21 @@
   .edit-date-status a.download-link:hover{ background:#0c6631; }
 
   .topbar-spacer{ display:none; }
-  @media (max-width: 900px){
-    header.topbar{ grid-template-columns:1fr auto; row-gap:7px; }
-    .meta{ grid-column:1 / -1; grid-row:2; justify-content:flex-start; }
+  @media (max-width: 960px){
+    header.topbar{ grid-template-columns:1fr auto; row-gap:10px; padding:10px 14px; }
+    .brand{ border-right:0; padding-right:0; }
+    .topbar-actions{ grid-column:2; }
+    #patientBar{ grid-column:1 / -1; grid-row:2; }
+    #infoRow{ padding:8px 14px; }
+    #statusLine{ margin-left:0; justify-content:flex-start; }
   }
   .btn.ghost{ background:#e9f5fc; color:#17394f; border-color:#7299b3; padding:6px 10px; font-size:12px; border-radius:3px; }
   .btn.ghost:hover{ background:#fff; border-color:#3c789d; }
+  .edit-section-title{
+    font-size:10.5px; font-weight:800; letter-spacing:.9px; text-transform:uppercase; color:#5a7a90;
+    margin:16px 0 8px; padding-bottom:5px; border-bottom:1px solid #e3edf4;
+  }
+  .edit-all-modal{ max-width:560px; max-height:92vh; overflow:auto; }
 
   /* toolbar */
   .toolbar{
@@ -277,27 +312,6 @@
   #timeAxisWrap .lane-label{ background: var(--panel); border-right:1px solid var(--grid); }
   #timeAxis{ flex:1; width:100%; display:block; height:28px; }
 
-  /* Anagrafica: fascia clinica leggibile e sempre separata dal tracciato */
-  #patientBar{
-    min-height:58px;
-    padding:9px 18px 10px;
-    border-bottom:1px solid #6f91a9;
-    border-top:1px solid #edf8ff;
-    background:linear-gradient(180deg,#f6fbff 0%,#e0f0fa 100%);
-    color:#294f67;
-    display:flex; align-items:center; gap:10px 24px; flex-wrap:wrap;
-    font-family:var(--sans); font-size:14px; line-height:1.25;
-    box-shadow:inset 0 1px 0 #fff;
-  }
-  #patientBar .patient-caption{
-    color:#315d78; font-size:10px; font-weight:800; letter-spacing:.9px;
-    text-transform:uppercase; padding-right:14px; border-right:1px solid #9bb7c9;
-  }
-  #patientBar .patient-name{ color:#123b57; font-size:19px; font-weight:750; letter-spacing:.1px; }
-  #patientBar .patient-field{ white-space:nowrap; }
-  #patientBar .patient-field b{ color:#173d57; font-weight:750; }
-  #patientBar .patient-note{ flex-basis:100%; font-size:12px; color:#365a70; }
-  #patientBar.hidden{ display:none; }
 
   /* Piede del visualizzatore: sottile fascia azzurra come nell'applicativo */
   #statusFooter{
@@ -338,12 +352,18 @@
   <div id="viewer">
     <header class="topbar">
       <div class="brand"><img class="brand-logo" src="https://www.medeatelemedicina.com/wp-content/uploads/2024/06/Logo-MedEA-Telemedicina.svg" alt="MedEA Telemedicina"></div>
-      <div class="meta" id="metaLine"></div>
-      <div class="topbar-spacer"></div>
-      <button class="btn ghost" id="loadOtherBtn">Carica un altro esame</button>
+      <div id="patientBar" class="hidden"></div>
+      <div class="topbar-actions">
+        <button type="button" class="btn" id="editAllBtn">✏️ Modifica</button>
+        <button class="btn ghost" id="loadOtherBtn">Carica un altro esame</button>
+      </div>
     </header>
 
-    <div id="patientBar" class="hidden"></div>
+    <div id="infoRow">
+      <div id="examSummary" class="hidden"></div>
+      <div id="statusLine"></div>
+    </div>
+
     <div id="qualityModalOverlay" class="quality-modal-overlay hidden">
       <div class="quality-modal">
         <div class="quality-modal-header">
@@ -354,38 +374,15 @@
       </div>
     </div>
 
-    <div id="editDateModalOverlay" class="quality-modal-overlay hidden">
-      <div class="quality-modal edit-date-modal">
+    <div id="editAllModalOverlay" class="quality-modal-overlay hidden">
+      <div class="quality-modal edit-date-modal edit-all-modal">
         <div class="quality-modal-header">
-          <h3>Modifica data/ora avvio registrazione</h3>
-          <button type="button" class="quality-modal-close" id="editDateModalCloseBtn" aria-label="Chiudi">&times;</button>
+          <h3>Modifica dati paziente ed esame</h3>
+          <button type="button" class="quality-modal-close" id="editAllModalCloseBtn" aria-label="Chiudi">&times;</button>
         </div>
         <div class="quality-modal-body">
-          <p class="edit-date-hint">Corregge la data/ora di avvio sia nel database dell'esame (PersonalDB) sia nei dati grezzi (Signal.time) e genera una nuova cartella .zip da scaricare. L'elaborazione avviene interamente nel browser, sul file originariamente caricato.</p>
-          <div class="edit-date-row">
-            <div>
-              <label for="editNewDate">Nuova data</label>
-              <input type="date" id="editNewDate">
-            </div>
-            <div>
-              <label for="editNewTime">Nuova ora</label>
-              <input type="time" id="editNewTime" step="1">
-            </div>
-          </div>
-          <button type="button" class="btn primary edit-date-submit" id="editDateProcessBtn">Elabora e scarica cartella aggiornata</button>
-          <div id="editDateStatus" class="edit-date-status"></div>
-        </div>
-      </div>
-    </div>
-
-    <div id="editPatientModalOverlay" class="quality-modal-overlay hidden">
-      <div class="quality-modal edit-date-modal edit-patient-modal">
-        <div class="quality-modal-header">
-          <h3>Modifica dati paziente</h3>
-          <button type="button" class="quality-modal-close" id="editPatientModalCloseBtn" aria-label="Chiudi">&times;</button>
-        </div>
-        <div class="quality-modal-body">
-          <p class="edit-date-hint">Corregge i dati anagrafici nel database dell'esame (PersonalDB) e genera una nuova cartella .zip da scaricare. Il BMI viene ricalcolato da altezza e peso. L'elaborazione avviene interamente nel browser.</p>
+          <p class="edit-date-hint">Corregge i dati anagrafici e la data/ora di avvio nel database dell'esame (PersonalDB) e, per la data, anche nei dati grezzi (Signal.time), poi genera una nuova cartella .zip da scaricare. Il BMI viene ricalcolato da altezza e peso. L'elaborazione avviene interamente nel browser, sul file originariamente caricato.</p>
+          <div class="edit-section-title">Paziente</div>
           <div class="edit-date-row">
             <div><label for="editPatName">Nome e cognome</label><input type="text" id="editPatName" autocomplete="off"></div>
           </div>
@@ -400,8 +397,19 @@
           <div class="edit-date-row">
             <div><label for="editPatRemark">Nota</label><input type="text" id="editPatRemark" autocomplete="off"></div>
           </div>
-          <button type="button" class="btn primary edit-date-submit" id="editPatientProcessBtn">Elabora e scarica cartella aggiornata</button>
-          <div id="editPatientStatus" class="edit-date-status"></div>
+          <div class="edit-section-title">Avvio esame</div>
+          <div class="edit-date-row">
+            <div>
+              <label for="editNewDate">Data</label>
+              <input type="date" id="editNewDate">
+            </div>
+            <div>
+              <label for="editNewTime">Ora</label>
+              <input type="time" id="editNewTime" step="1">
+            </div>
+          </div>
+          <button type="button" class="btn primary edit-date-submit" id="editAllProcessBtn">Elabora e scarica cartella aggiornata</button>
+          <div id="editAllStatus" class="edit-date-status"></div>
         </div>
       </div>
     </div>
@@ -514,7 +522,7 @@
   var viewer = document.getElementById('viewer');
   var lanesEl = document.getElementById('lanes');
   var timeAxisCanvas = document.getElementById('timeAxis');
-  var metaLine = document.getElementById('metaLine');
+  var statusLine = document.getElementById('statusLine');
   var patientBar = document.getElementById('patientBar');
   var windowSelect = document.getElementById('windowSelect');
   var posSlider = document.getElementById('posSlider');
@@ -998,49 +1006,67 @@
   }
 
   function buildMetaLine(){
-    var parts = [];
-    if (state.startDate){
-      parts.push('<span>Inizio registrazione: <b>' + formatDateTime(state.startDate) + '</b></span>');
-      if (isStartDateStale(state.startDate)){
-        parts.push('<span class="stale-date-badge">⚠ VERIFICA LA DATA</span>');
-      }
-    } else {
-      parts.push('<span>Inizio registrazione: <b>non disponibile</b> — asse tempo relativo</span>');
-      if (state.downloadDate){
-        parts.push('<span>Scaricato il: <b>' + formatDateTime(state.downloadDate) + '</b></span>');
-      }
-    }
-    parts.push('<button type="button" id="editStartDateBtn" class="edit-date-btn">✏️ Modifica data/ora</button>');
+    var statusParts = [];
     var isShortRecording = state.totalDuration < (4 * 60 * 60);
-    parts.push('<span class="duration-badge' + (isShortRecording ? ' short-recording' : '') + '">Durata registrazione: <b>' + formatHMS(state.totalDuration) + '</b>' + (isShortRecording ? ' — inferiore a 4 ore' : '') + '</span>');
+    statusParts.push('<span class="duration-badge' + (isShortRecording ? ' short-recording' : '') + '">Durata registrazione: <b>' + formatHMS(state.totalDuration) + '</b>' + (isShortRecording ? ' — inferiore a 4 ore' : '') + '</span>');
+    var footerInfo = document.getElementById('footerInfo');
+    if (footerInfo) footerInfo.textContent = isShortRecording ? 'Attenzione: registrazione inferiore a 4 ore' : 'Durata registrazione valida';
+    var qualityIssues = getQualityIssues();
+    if (qualityIssues.length === 0){
+      statusParts.push('<span class="valid-measurement-badge">MISURAZIONE VALIDA</span>');
+    } else {
+      statusParts.push('<button type="button" id="invalidMeasurementBtn" class="invalid-measurement-badge">MISURAZIONE NON ACCETTABILE<span class="badge-hint">clicca per info</span></button>');
+    }
+    statusLine.innerHTML = statusParts.join('');
+    buildPatientBar();
+    renderExamSummary();
+    var invalidBtn = document.getElementById('invalidMeasurementBtn');
+    if (invalidBtn){
+      invalidBtn.addEventListener('click', function(){ showQualityIssuesModal(qualityIssues); });
+    }
+  }
+
+  function renderExamSummary(){
+    var box = document.getElementById('examSummary');
+    if (!box) return;
+    function bestSeconds(regex){
+      var best = null;
+      state.channels.forEach(function(c){
+        if (!regex.test(c.label)) return;
+        var sec = channelNonFlatSeconds(c);
+        if (best === null || sec > best) best = sec;
+      });
+      return best; // null = canale assente
+    }
+    function hm(sec){
+      sec = Math.max(0, Math.round(sec));
+      var h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+      return h + 'h ' + (m<10 ? '0'+m : m) + 'm';
+    }
+    function tile(label, sec, opts){
+      opts = opts || {};
+      var cls = 'sum-tile';
+      if (opts.check && sec !== null) cls += (sec >= QUALITY_MIN_SECONDS ? ' ok' : ' bad');
+      var dot = opts.dot ? '<span class="dot ' + opts.dot + '"></span>' : '';
+      var val = (sec === null) ? 'assente' : hm(sec);
+      var sub = (sec !== null && state.totalDuration) ? Math.round(sec / state.totalDuration * 100) + '% della registrazione' : '&nbsp;';
+      return '<div class="' + cls + '"><div class="sum-label">' + dot + label + '</div><div class="sum-value">' + val + '</div><div class="sum-sub">' + sub + '</div></div>';
+    }
+    var html = '<div class="sum-caption">Contatori esame</div>';
+    html += tile('Flusso respiratorio', bestSeconds(/^Flow$/), { check:true });
+    html += tile('Espansione toracica', bestSeconds(/^(Chest|Abdomen|Chest\/Abdomen)$/), { check:true });
+    html += tile('SpO2', bestSeconds(/^SpO2$/i), { check:true });
     if (state.stages && state.stages.length){
       var sleepEp = 0, wakeEp = 0;
       state.stages.forEach(function(st){
         if (st.stage === 9) sleepEp++;
         else if (st.stage === 3) wakeEp++;
       });
-      parts.push('<span class="sleepwake-badge sleep"><span class="dot"></span>Sonno: <b>' + formatHMS(sleepEp * 30) + '</b></span>');
-      parts.push('<span class="sleepwake-badge wake"><span class="dot"></span>Veglia: <b>' + formatHMS(wakeEp * 30) + '</b></span>');
+      html += tile('Sonno', sleepEp * 30, { dot:'sleep' });
+      html += tile('Veglia', wakeEp * 30, { dot:'wake' });
     }
-    var footerInfo = document.getElementById('footerInfo');
-    if (footerInfo) footerInfo.textContent = isShortRecording ? 'Attenzione: registrazione inferiore a 4 ore' : 'Durata registrazione valida';
-    if (state.deviceModel) parts.push('<span>Dispositivo: <b>' + escapeHtml(state.deviceModel) + '</b></span>');
-    parts.push('<span>Canali: <b>' + state.channels.length + '</b></span>');
-    var qualityIssues = getQualityIssues();
-    if (qualityIssues.length === 0){
-      parts.push('<span class="valid-measurement-badge">MISURAZIONE VALIDA</span>');
-    } else {
-      parts.push('<button type="button" id="invalidMeasurementBtn" class="invalid-measurement-badge">MISURAZIONE NON ACCETTABILE<span class="badge-hint">clicca per info</span></button>');
-    }
-    metaLine.innerHTML = parts.join('');
-    var invalidBtn = document.getElementById('invalidMeasurementBtn');
-    if (invalidBtn){
-      invalidBtn.addEventListener('click', function(){ showQualityIssuesModal(qualityIssues); });
-    }
-    var editBtn = document.getElementById('editStartDateBtn');
-    if (editBtn){
-      editBtn.addEventListener('click', openEditDateModal);
-    }
+    box.innerHTML = html;
+    box.classList.remove('hidden');
   }
 
   function showQualityIssuesModal(issues){
@@ -1120,209 +1146,39 @@
     return editDateSqlPromise;
   }
 
-  function openEditDateModal(){
-    var overlay = document.getElementById('editDateModalOverlay');
-    var statusEl = document.getElementById('editDateStatus');
-    var processBtn = document.getElementById('editDateProcessBtn');
-    if (!overlay) return;
-    statusEl.innerHTML = '';
-    processBtn.disabled = false;
-    processBtn.textContent = 'Elabora e scarica cartella aggiornata';
-    var d = state.startDate || new Date();
-    document.getElementById('editNewDate').value = d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
-    document.getElementById('editNewTime').value = pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
-    overlay.classList.remove('hidden');
-  }
-
-  function hideEditDateModal(){
-    var overlay = document.getElementById('editDateModalOverlay');
-    if (overlay) overlay.classList.add('hidden');
-  }
-
-  function editDateLog(msg, cls){
-    var statusEl = document.getElementById('editDateStatus');
-    var line = document.createElement('div');
-    if (cls) line.className = cls;
-    line.textContent = msg;
-    statusEl.appendChild(line);
-  }
-
-  function runEditDateProcess(){
-    var statusEl = document.getElementById('editDateStatus');
-    var processBtn = document.getElementById('editDateProcessBtn');
-    statusEl.innerHTML = '';
-
-    if (!state.rawFile){
-      editDateLog('Errore: il file .zip originale non è più disponibile in questa pagina. Ricarica l\'esame e riprova.', 'err');
-      return;
-    }
-    var newDateVal = document.getElementById('editNewDate').value;
-    var newTimeVal = document.getElementById('editNewTime').value;
-    if (!newDateVal || !newTimeVal){
-      editDateLog('Inserisci sia la data che l\'ora.', 'err');
-      return;
-    }
-
-    var dateParts = newDateVal.split('-').map(Number);
-    var timeParts = newTimeVal.split(':').map(Number);
-    var newParsed = { y:dateParts[0], mo:dateParts[1], da:dateParts[2], ho:timeParts[0]||0, mi:timeParts[1]||0, se:timeParts[2]||0 };
-    var newStr = editDateFormatDateStr(newParsed);
-
-    processBtn.disabled = true;
-    processBtn.textContent = 'Elaborazione in corso…';
-    editDateLog('Nuova data/ora di avvio: ' + newStr, 'info');
-    editDateLog('Rielaborazione della cartella in corso...', 'info');
-
-    var zipRef = null;
-    var oldParsed = null;
-    var personalDbEntry = null;
-
-    state.rawFile.arrayBuffer().then(function(buf){
-      return JSZip.loadAsync(buf);
-    }).then(function(zip){
-      zipRef = zip;
-      personalDbEntry = findEntry(zip, /(^|\/)PersonalDB$/i);
-      if (!personalDbEntry){
-        editDateLog('Errore: non trovo il file "PersonalDB" nello zip originale.', 'err');
-        throw { handled: true };
-      }
-      return getEditDateSQL().then(function(SQL){
-        return personalDbEntry.async('uint8array').then(function(dbBytes){
-          var db = new SQL.Database(dbBytes);
-          try{
-            var res = db.exec("SELECT StartTime FROM PatientBasicInfo LIMIT 1");
-            if (res.length && res[0].values.length){
-              oldParsed = editDateParseDateStr(res[0].values[0][0]);
-            }
-          }catch(e){}
-          if (!oldParsed && state.startDate){
-            oldParsed = {
-              y: state.startDate.getFullYear(), mo: state.startDate.getMonth()+1, da: state.startDate.getDate(),
-              ho: state.startDate.getHours(), mi: state.startDate.getMinutes(), se: state.startDate.getSeconds()
-            };
-          }
-
-          db.run("UPDATE PatientBasicInfo SET StartTime = ?", [newStr]);
-
-          try{
-            var check = db.exec("SELECT FirstDate, LastDate FROM PatientBasicInfo LIMIT 1");
-            if (check.length && oldParsed){
-              var firstDate = check[0].values[0][0], lastDate = check[0].values[0][1];
-              var oldMs = Date.UTC(oldParsed.y, oldParsed.mo-1, oldParsed.da, oldParsed.ho, oldParsed.mi, oldParsed.se);
-              var newMs = Date.UTC(newParsed.y, newParsed.mo-1, newParsed.da, newParsed.ho, newParsed.mi, newParsed.se);
-              var deltaMs = newMs - oldMs;
-              var shiftDateStr = function(str){
-                var p = editDateParseDateStr(str);
-                if (!p) return str;
-                var ms = Date.UTC(p.y, p.mo-1, p.da, p.ho, p.mi, p.se) + deltaMs;
-                var dd = new Date(ms);
-                return editDateFormatDateStr({
-                  y: dd.getUTCFullYear(), mo: dd.getUTCMonth()+1, da: dd.getUTCDate(),
-                  ho: dd.getUTCHours(), mi: dd.getUTCMinutes(), se: dd.getUTCSeconds()
-                });
-              };
-              if (firstDate) db.run("UPDATE PatientBasicInfo SET FirstDate = ?", [shiftDateStr(firstDate)]);
-              if (lastDate) db.run("UPDATE PatientBasicInfo SET LastDate = ?", [shiftDateStr(lastDate)]);
-            }
-          }catch(e){
-            // FirstDate/LastDate non presenti su tutti i modelli di dispositivo - non bloccante
-          }
-
-          var newDbBytes = db.export();
-          db.close();
-          zipRef.file(personalDbEntry.name, newDbBytes);
-          editDateLog('Database interno aggiornato (StartTime → ' + newStr + ').', 'ok');
-
-          var signalTimeEntry = findEntry(zipRef, /(^|\/)SD_RawData\/Signal\.time$/i);
-          var sigStep = Promise.resolve();
-          if (signalTimeEntry && oldParsed){
-            sigStep = signalTimeEntry.async('uint8array').then(function(sigBytes){
-              var oldPattern = editDateMake7BytePattern(oldParsed);
-              var newPattern = editDateMake7BytePattern(newParsed);
-              var occurrences = editDateFindAllOccurrences(sigBytes, oldPattern);
-              if (occurrences.length === 0){
-                editDateLog('Attenzione: timestamp non trovato in Signal.time (formato diverso su questo dispositivo). Il database è comunque stato aggiornato.', 'info');
-              } else {
-                occurrences.forEach(function(off){ sigBytes.set(newPattern, off); });
-                zipRef.file(signalTimeEntry.name, sigBytes);
-                editDateLog('Timestamp aggiornato anche nei dati grezzi (Signal.time), ' + occurrences.length + ' occorrenza/e.', 'ok');
-              }
-            });
-          } else {
-            editDateLog('Attenzione: non trovato SD_RawData/Signal.time nello zip: salto questo passaggio.', 'info');
-          }
-
-          return sigStep.then(function(){
-            editDateLog('Generazione archivio zip aggiornato...', 'info');
-            return zipRef.generateAsync({ type:'blob', compression:'DEFLATE' });
-          });
-        });
-      });
-    }).then(function(blob){
-      var url = URL.createObjectURL(blob);
-      var baseName = (state.rawFile.name || 'polisonnografia.zip').replace(/\.zip$/i, '');
-      var dateTag = newStr.replace(/[: ]/g, '-');
-      var a = document.createElement('a');
-      a.href = url;
-      a.className = 'download-link';
-      a.download = baseName + '_' + dateTag + '.zip';
-      a.textContent = '⬇️ Scarica la cartella aggiornata (.zip)';
-      statusEl.appendChild(a);
-      editDateLog('Fatto! Puoi scaricare lo zip qui sopra.', 'ok');
-      // Le modifiche successive (anche dati paziente) partono dallo zip già aggiornato
-      state.rawFile = new File([blob], baseName + '_' + dateTag + '.zip', { type: 'application/zip' });
-
-      // Aggiorna anche la data mostrata nell'anteprima corrente, per coerenza visiva
-      state.startDate = new Date(newParsed.y, newParsed.mo-1, newParsed.da, newParsed.ho, newParsed.mi, newParsed.se);
-      buildMetaLine();
-      render();
-
-      processBtn.disabled = false;
-      processBtn.textContent = 'Elabora e scarica cartella aggiornata';
-    }).catch(function(e){
-      if (!e || !e.handled){
-        editDateLog('Errore durante l\'elaborazione: ' + (e && e.message ? e.message : e), 'err');
-        console.error(e);
-      }
-      processBtn.disabled = false;
-      processBtn.textContent = 'Elabora e scarica cartella aggiornata';
-    });
-  }
-
-  (function initEditDateModalHandlers(){
-    var overlay = document.getElementById('editDateModalOverlay');
-    var closeBtn = document.getElementById('editDateModalCloseBtn');
-    var processBtn = document.getElementById('editDateProcessBtn');
-    if (closeBtn) closeBtn.addEventListener('click', hideEditDateModal);
-    if (processBtn) processBtn.addEventListener('click', runEditDateProcess);
-    if (overlay){
-      overlay.addEventListener('click', function(e){
-        if (e.target === overlay) hideEditDateModal();
-      });
-    }
-    document.addEventListener('keydown', function(e){
-      if (e.key === 'Escape' || e.key === 'Esc'){
-        var ov = document.getElementById('editDateModalOverlay');
-        if (ov && !ov.classList.contains('hidden')) hideEditDateModal();
-      }
-    });
-  })();
-
   function buildPatientBar(){
-    if (!state.patient){ patientBar.classList.add('hidden'); return; }
-    var p = state.patient;
-    var bits = ['<span class="patient-caption">Dati paziente</span>'];
-    if (p.Name) bits.push('<span class="patient-name">' + escapeHtml(p.Name) + '</span>');
-    if (p.Age) bits.push('<span class="patient-field">Età: <b>' + escapeHtml(p.Age) + '</b></span>');
-    if (p.Height) bits.push('<span class="patient-field">Altezza: <b>' + escapeHtml(formatMeasurement(p.Height)) + ' cm</b></span>');
-    if (p.Weight) bits.push('<span class="patient-field">Peso: <b>' + escapeHtml(formatMeasurement(p.Weight)) + ' kg</b></span>');
-    if (p.BMI) bits.push('<span class="patient-field">BMI: <b>' + Number(p.BMI).toFixed(1) + '</b></span>');
-    if (p.Remark) bits.push('<span class="patient-note">Nota: <b>' + escapeHtml(p.Remark) + '</b></span>');
-    bits.push('<button type="button" id="editPatientBtn" class="edit-patient-btn">✏️ Modifica dati paziente</button>');
-    patientBar.innerHTML = bits.join('');
+    var p = state.patient || {};
+    function chip(label, value, cls){
+      return '<span class="patient-chip' + (cls ? ' ' + cls : '') + '"><i>' + label + '</i><b>' + value + '</b></span>';
+    }
+    var line = [];
+    line.push('<span class="patient-name">' + (p.Name ? escapeHtml(p.Name) : 'Paziente non disponibile') + '</span>');
+    if (p.Age) line.push(chip('Età', escapeHtml(p.Age)));
+    if (p.Height) line.push(chip('Altezza', escapeHtml(formatMeasurement(p.Height)) + ' cm'));
+    if (p.Weight) line.push(chip('Peso', escapeHtml(formatMeasurement(p.Weight)) + ' kg'));
+    if (p.BMI) line.push(chip('BMI', Number(p.BMI).toFixed(1)));
+    // Data/ora di avvio dell'esame: proprietà del paziente
+    if (state.startDate){
+      var stale = isStartDateStale(state.startDate);
+      line.push(chip('Avvio esame', formatDateTime(state.startDate), stale ? 'stale' : 'accent'));
+      if (stale) line.push('<span class="patient-warn">⚠ VERIFICA LA DATA</span>');
+    } else {
+      line.push(chip('Avvio esame', 'non disponibile', 'stale'));
+    }
+    var sub = [];
+    if (!state.startDate){
+      sub.push('Asse tempo relativo');
+      if (state.downloadDate) sub.push('Scaricato il <b>' + formatDateTime(state.downloadDate) + '</b>');
+    }
+    if (state.deviceModel) sub.push('Dispositivo <b>' + escapeHtml(state.deviceModel) + '</b>');
+    sub.push('Canali <b>' + state.channels.length + '</b>');
+    if (p.Remark) sub.push('Nota <b>' + escapeHtml(p.Remark) + '</b>');
+    var initial = p.Name ? String(p.Name).trim().charAt(0).toUpperCase() : '?';
+    patientBar.innerHTML =
+      '<div class="patient-avatar" aria-hidden="true">' + escapeHtml(initial) + '</div>' +
+      '<div class="patient-main"><div class="patient-line">' + line.join('') + '</div>' +
+      '<div class="patient-sub">' + sub.join('<span class="sep">·</span>') + '</div></div>';
     patientBar.classList.remove('hidden');
-    var epb = document.getElementById('editPatientBtn');
-    if (epb) epb.addEventListener('click', openEditPatientModal);
   }
 
   // ---------------------------------------------------------------
@@ -1353,10 +1209,16 @@
     return age >= 0 && age < 130 ? age : null;
   }
 
-  function openEditPatientModal(){
+  // ---------------------------------------------------------------
+  // Modifica unica: dati paziente + data/ora di avvio dell'esame.
+  // Una sola rielaborazione dello zip: riscrive PatientBasicInfo in PersonalDB
+  // (ricifrando il nome se in origine era cifrato) e, se la data è cambiata,
+  // aggiorna anche StartTime/FirstDate/LastDate e Signal.time.
+  // ---------------------------------------------------------------
+  function openEditAllModal(){
     var p = state.patient || {};
-    document.getElementById('editPatientStatus').innerHTML = '';
-    var btn = document.getElementById('editPatientProcessBtn');
+    document.getElementById('editAllStatus').innerHTML = '';
+    var btn = document.getElementById('editAllProcessBtn');
     btn.disabled = false; btn.textContent = 'Elabora e scarica cartella aggiornata';
     document.getElementById('editPatName').value = p.Name || '';
     var bm = String(p.Birth || '').match(/^\d{4}-\d{2}-\d{2}/);
@@ -1365,24 +1227,27 @@
     document.getElementById('editPatHeight').value = p.Height ? formatMeasurement(p.Height) : '';
     document.getElementById('editPatWeight').value = p.Weight ? formatMeasurement(p.Weight) : '';
     document.getElementById('editPatRemark').value = p.Remark || '';
-    document.getElementById('editPatientModalOverlay').classList.remove('hidden');
+    var d = state.startDate;
+    document.getElementById('editNewDate').value = d ? (d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate())) : '';
+    document.getElementById('editNewTime').value = d ? (pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds())) : '';
+    document.getElementById('editAllModalOverlay').classList.remove('hidden');
   }
-  function hideEditPatientModal(){
-    document.getElementById('editPatientModalOverlay').classList.add('hidden');
+  function hideEditAllModal(){
+    document.getElementById('editAllModalOverlay').classList.add('hidden');
   }
-  function editPatientLog(msg, cls){
+  function editAllLog(msg, cls){
     var line = document.createElement('div');
     if (cls) line.className = cls;
     line.textContent = msg;
-    document.getElementById('editPatientStatus').appendChild(line);
+    document.getElementById('editAllStatus').appendChild(line);
   }
 
-  function runEditPatientProcess(){
-    var statusEl = document.getElementById('editPatientStatus');
-    var btn = document.getElementById('editPatientProcessBtn');
+  function runEditAllProcess(){
+    var statusEl = document.getElementById('editAllStatus');
+    var btn = document.getElementById('editAllProcessBtn');
     statusEl.innerHTML = '';
     if (!state.rawFile){
-      editPatientLog('Errore: il file .zip originale non è più disponibile in questa pagina. Ricarica l\'esame e riprova.', 'err');
+      editAllLog('Errore: il file .zip originale non è più disponibile in questa pagina. Ricarica l\'esame e riprova.', 'err');
       return;
     }
     var name = document.getElementById('editPatName').value.trim();
@@ -1393,28 +1258,56 @@
     var remark = document.getElementById('editPatRemark').value.trim();
     var h = parseFloat(height), w = parseFloat(weight);
     if ((height && !(h > 0)) || (weight && !(w > 0))){
-      editPatientLog('Altezza e peso devono essere numeri positivi.', 'err');
+      editAllLog('Altezza e peso devono essere numeri positivi.', 'err');
       return;
     }
     var bmi = (h > 0 && w > 0) ? (w / Math.pow(h / 100, 2)) : null;
     var enc = (state.patient && state.patient._enc) || {};
 
+    var newDateVal = document.getElementById('editNewDate').value;
+    var newTimeVal = document.getElementById('editNewTime').value;
+    if ((newDateVal && !newTimeVal) || (!newDateVal && newTimeVal)){
+      editAllLog('Per la data di avvio inserisci sia la data che l\'ora (oppure lasciali entrambi vuoti).', 'err');
+      return;
+    }
+    var newParsed = null;
+    if (newDateVal && newTimeVal){
+      var dp = newDateVal.split('-').map(Number);
+      var tp = newTimeVal.split(':').map(Number);
+      newParsed = { y:dp[0], mo:dp[1], da:dp[2], ho:tp[0]||0, mi:tp[1]||0, se:tp[2]||0 };
+    }
+
     btn.disabled = true; btn.textContent = 'Elaborazione in corso…';
-    editPatientLog('Rielaborazione della cartella in corso...', 'info');
+    editAllLog('Rielaborazione della cartella in corso...', 'info');
 
     var zipRef = null, dbEntry = null;
+    var oldParsed = null, dateChanged = false, newStr = null;
     state.rawFile.arrayBuffer().then(function(buf){
       return JSZip.loadAsync(buf);
     }).then(function(zip){
       zipRef = zip;
       dbEntry = findEntry(zip, /(^|\/)PersonalDB$/i);
       if (!dbEntry){
-        editPatientLog('Errore: non trovo il file "PersonalDB" nello zip originale.', 'err');
+        editAllLog('Errore: non trovo il file "PersonalDB" nello zip originale.', 'err');
         throw { handled: true };
       }
       return getEditDateSQL().then(function(SQL){
         return dbEntry.async('uint8array').then(function(dbBytes){
           var db = new SQL.Database(dbBytes);
+
+          // --- data di avvio precedente (per capire se è cambiata e di quanto spostare le altre date)
+          try{
+            var res = db.exec("SELECT StartTime FROM PatientBasicInfo LIMIT 1");
+            if (res.length && res[0].values.length) oldParsed = editDateParseDateStr(res[0].values[0][0]);
+          }catch(e){}
+          if (!oldParsed && state.startDate){
+            oldParsed = {
+              y: state.startDate.getFullYear(), mo: state.startDate.getMonth()+1, da: state.startDate.getDate(),
+              ho: state.startDate.getHours(), mi: state.startDate.getMinutes(), se: state.startDate.getSeconds()
+            };
+          }
+
+          // --- dati paziente
           // Nome: se in origine era cifrato lo si ricifra e si salvano i byte cifrati invariati (blob; hex() li restituisce identici,
           // un CAST AS TEXT invece li ricodificherebbe e renderebbe il nome indecifrabile)
           if (enc.Name && name){
@@ -1427,47 +1320,113 @@
             height ? h.toFixed(6) : '', weight ? w.toFixed(6) : '',
             bmi !== null ? bmi.toFixed(6) : '', remark
           ]);
+          editAllLog('Dati paziente aggiornati nel database interno.', 'ok');
+
+          // --- data/ora di avvio (solo se cambiata)
+          if (newParsed){
+            newStr = editDateFormatDateStr(newParsed);
+            var oldStr = oldParsed ? editDateFormatDateStr(oldParsed) : null;
+            dateChanged = (newStr !== oldStr);
+          }
+          if (dateChanged){
+            db.run("UPDATE PatientBasicInfo SET StartTime = ?", [newStr]);
+            try{
+              var check = db.exec("SELECT FirstDate, LastDate FROM PatientBasicInfo LIMIT 1");
+              if (check.length && oldParsed){
+                var firstDate = check[0].values[0][0], lastDate = check[0].values[0][1];
+                var oldMs = Date.UTC(oldParsed.y, oldParsed.mo-1, oldParsed.da, oldParsed.ho, oldParsed.mi, oldParsed.se);
+                var newMs = Date.UTC(newParsed.y, newParsed.mo-1, newParsed.da, newParsed.ho, newParsed.mi, newParsed.se);
+                var deltaMs = newMs - oldMs;
+                var shiftDateStr = function(str){
+                  var pp = editDateParseDateStr(str);
+                  if (!pp) return str;
+                  var ms = Date.UTC(pp.y, pp.mo-1, pp.da, pp.ho, pp.mi, pp.se) + deltaMs;
+                  var dd = new Date(ms);
+                  return editDateFormatDateStr({
+                    y: dd.getUTCFullYear(), mo: dd.getUTCMonth()+1, da: dd.getUTCDate(),
+                    ho: dd.getUTCHours(), mi: dd.getUTCMinutes(), se: dd.getUTCSeconds()
+                  });
+                };
+                if (firstDate) db.run("UPDATE PatientBasicInfo SET FirstDate = ?", [shiftDateStr(firstDate)]);
+                if (lastDate) db.run("UPDATE PatientBasicInfo SET LastDate = ?", [shiftDateStr(lastDate)]);
+              }
+            }catch(e){
+              // FirstDate/LastDate non presenti su tutti i modelli di dispositivo - non bloccante
+            }
+            editAllLog('Data/ora di avvio aggiornata (StartTime → ' + newStr + ').', 'ok');
+          }
+
           var newDb = db.export();
           db.close();
           zipRef.file(dbEntry.name, newDb);
-          editPatientLog('Database interno aggiornato (dati paziente).', 'ok');
-          editPatientLog('Generazione archivio zip aggiornato...', 'info');
-          return zipRef.generateAsync({ type:'blob', compression:'DEFLATE' });
+
+          // --- dati grezzi (Signal.time), solo se la data è cambiata
+          var sigStep = Promise.resolve();
+          if (dateChanged){
+            var signalTimeEntry = findEntry(zipRef, /(^|\/)SD_RawData\/Signal\.time$/i);
+            if (signalTimeEntry && oldParsed){
+              sigStep = signalTimeEntry.async('uint8array').then(function(sigBytes){
+                var oldPattern = editDateMake7BytePattern(oldParsed);
+                var newPattern = editDateMake7BytePattern(newParsed);
+                var occurrences = editDateFindAllOccurrences(sigBytes, oldPattern);
+                if (occurrences.length === 0){
+                  editAllLog('Attenzione: timestamp non trovato in Signal.time (formato diverso su questo dispositivo). Il database è comunque stato aggiornato.', 'info');
+                } else {
+                  occurrences.forEach(function(off){ sigBytes.set(newPattern, off); });
+                  zipRef.file(signalTimeEntry.name, sigBytes);
+                  editAllLog('Timestamp aggiornato anche nei dati grezzi (Signal.time), ' + occurrences.length + ' occorrenza/e.', 'ok');
+                }
+              });
+            } else {
+              editAllLog('Attenzione: non trovato SD_RawData/Signal.time nello zip: salto questo passaggio.', 'info');
+            }
+          }
+
+          return sigStep.then(function(){
+            editAllLog('Generazione archivio zip aggiornato...', 'info');
+            return zipRef.generateAsync({ type:'blob', compression:'DEFLATE' });
+          });
         });
       });
     }).then(function(blob){
       var baseName = (state.rawFile.name || 'polisonnografia.zip').replace(/\.zip$/i, '');
-      var fileName = baseName + '_paziente.zip';
+      var tag = dateChanged ? newStr.replace(/[: ]/g, '-') : 'paziente';
+      var fileName = baseName + '_' + tag + '.zip';
       var a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.className = 'download-link';
       a.download = fileName;
       a.textContent = '⬇️ Scarica la cartella aggiornata (.zip)';
       statusEl.appendChild(a);
-      editPatientLog('Fatto! Puoi scaricare lo zip qui sopra.', 'ok');
-      // Le modifiche successive (anche data/ora) partono dallo zip già aggiornato
+      editAllLog('Fatto! Puoi scaricare lo zip qui sopra.', 'ok');
+      // Le modifiche successive partono dallo zip già aggiornato
       state.rawFile = new File([blob], fileName, { type: 'application/zip' });
       var P = state.patient || (state.patient = {});
       P.Name = name; P.Birth = birth; P.Age = age; P.Height = height; P.Weight = weight;
       P.BMI = bmi !== null ? bmi : ''; P.Remark = remark;
-      buildPatientBar();
+      if (dateChanged){
+        state.startDate = new Date(newParsed.y, newParsed.mo-1, newParsed.da, newParsed.ho, newParsed.mi, newParsed.se);
+      }
+      buildMetaLine();
+      if (dateChanged) render();
       btn.disabled = false; btn.textContent = 'Elabora e scarica cartella aggiornata';
     }).catch(function(e){
       if (!e || !e.handled){
-        editPatientLog('Errore durante l\'elaborazione: ' + (e && e.message ? e.message : e), 'err');
+        editAllLog('Errore durante l\'elaborazione: ' + (e && e.message ? e.message : e), 'err');
         console.error(e);
       }
       btn.disabled = false; btn.textContent = 'Elabora e scarica cartella aggiornata';
     });
   }
 
-  (function initEditPatientModalHandlers(){
-    var overlay = document.getElementById('editPatientModalOverlay');
-    document.getElementById('editPatientModalCloseBtn').addEventListener('click', hideEditPatientModal);
-    document.getElementById('editPatientProcessBtn').addEventListener('click', runEditPatientProcess);
-    overlay.addEventListener('click', function(e){ if (e.target === overlay) hideEditPatientModal(); });
+  (function initEditAllModalHandlers(){
+    var overlay = document.getElementById('editAllModalOverlay');
+    document.getElementById('editAllModalCloseBtn').addEventListener('click', hideEditAllModal);
+    document.getElementById('editAllProcessBtn').addEventListener('click', runEditAllProcess);
+    document.getElementById('editAllBtn').addEventListener('click', openEditAllModal);
+    overlay.addEventListener('click', function(e){ if (e.target === overlay) hideEditAllModal(); });
     document.addEventListener('keydown', function(e){
-      if ((e.key === 'Escape' || e.key === 'Esc') && !overlay.classList.contains('hidden')) hideEditPatientModal();
+      if ((e.key === 'Escape' || e.key === 'Esc') && !overlay.classList.contains('hidden')) hideEditAllModal();
     });
     var birthEl = document.getElementById('editPatBirth');
     birthEl.addEventListener('change', function(){
