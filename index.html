@@ -215,6 +215,24 @@
   .quality-modal-body ul{ margin:6px 0 0 0; padding-left:20px; }
   .quality-modal-body li{ margin-bottom:6px; color:#a10d0d; }
 
+  /* Modale "Esame non importabile" */
+  .reject-modal .quality-modal-header h3{ color:#a10d0d; }
+  .reject-reason-box{
+    margin-top:0; padding:10px 12px; background:#fdf3f3; border:1px solid #e8b9b9; border-radius:4px;
+    color:#7a0a0a; font-size:13px; line-height:1.5; user-select:text; -webkit-user-select:text;
+  }
+  .reject-modal-actions{ display:flex; gap:8px; align-items:center; margin-top:14px; }
+  .reject-copy-msg{ font-size:12px; color:#1a7a3a; }
+  .reject-detail{ margin-top:10px; font-size:12px; color:#555; }
+  .edit-alert{
+    margin:0 0 12px 0; padding:10px 12px; background:#fdf3f3; border:1px solid #e8b9b9; border-radius:4px;
+    color:#a10d0d; font-size:13px; font-weight:700; line-height:1.5;
+  }
+  .edit-alert.hidden{ display:none; }
+  .reject-text{ white-space:pre-wrap; }
+  .reject-item + .reject-item{ margin-top:12px; padding-top:12px; border-top:1px dashed #e0b0b0; }
+  .reject-cause{ margin-top:6px; font-size:12px; color:#555; font-style:italic; }
+
   /* Modale "Modifica data/ora avvio registrazione" - stessa base del modale qualità */
   .edit-date-modal{ max-width:460px; }
   .edit-date-modal .quality-modal-header h3{ color:#17394f; }
@@ -348,6 +366,23 @@
     </div>
   </div>
 
+  <div id="rejectModalOverlay" class="quality-modal-overlay hidden">
+    <div class="quality-modal reject-modal" role="alertdialog" aria-modal="true" aria-labelledby="rejectModalTitle">
+      <div class="quality-modal-header">
+        <h3 id="rejectModalTitle">Motivo di rifiuto</h3>
+        <button type="button" class="quality-modal-close" id="rejectModalCloseBtn" aria-label="Chiudi">&times;</button>
+      </div>
+      <div class="quality-modal-body">
+        <div class="reject-reason-box" id="rejectReasonText"></div>
+        <div class="reject-modal-actions">
+          <button type="button" class="btn primary" id="rejectCopyBtn">Copia motivo</button>
+          <button type="button" class="btn" id="rejectCloseBtn2">Chiudi</button>
+          <span class="reject-copy-msg" id="rejectCopyMsg"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============== VIEWER ============== -->
   <div id="viewer">
     <header class="topbar">
@@ -381,6 +416,7 @@
           <button type="button" class="quality-modal-close" id="editAllModalCloseBtn" aria-label="Chiudi">&times;</button>
         </div>
         <div class="quality-modal-body">
+          <div id="editAllAlert" class="edit-alert hidden" role="alert"></div>
           <p class="edit-date-hint">Corregge i dati anagrafici e la data/ora di avvio nel database dell'esame (PersonalDB) e, per la data, anche nei dati grezzi (Signal.time), poi genera una nuova cartella .zip da scaricare. Il BMI viene ricalcolato da altezza e peso. L'elaborazione avviene interamente nel browser, sul file originariamente caricato.</p>
           <div class="edit-section-title">Paziente</div>
           <div class="edit-date-row">
@@ -563,7 +599,9 @@
     dropErr.style.display = 'none';
     pickBtn.textContent = "Lettura in corso…";
     state.rawFile = file; // conservato per poter rigenerare lo zip da "Modifica data/ora"
+    var rejectReasons = [];
     JSZip.loadAsync(file).then(function(zip){
+      rejectReasons = collectRejectReasons(zip);
       return parseZip(zip);
     }).then(function(){
       pickBtn.textContent = "Seleziona file ZIP";
@@ -572,12 +610,101 @@
       layoutLanes();
       fitWindowControls();
       render();
+      if (rejectReasons.length) showRejectModal(rejectReasons);
+      if (hasChineseName()) openEditAllModal(BAD_REGISTRY_TEXT);
     }).catch(function(err){
       console.error(err);
       pickBtn.textContent = "Seleziona file ZIP";
       showError("Impossibile leggere il file:\n" + (err && err.message ? err.message : err));
     });
   }
+
+  // ---------------------------------------------------------------
+  // Controllo nome cartella esame: deve essere un codice alfanumerico
+  // (quello generato dal dispositivo). Se la cartella e' stata rinominata
+  // (spazi, trattini, underscore, ecc.) l'esame non e' importabile.
+  // ---------------------------------------------------------------
+  // Codice generato dal dispositivo: GUID, es. {079A9C31-890E-414F-968C-B70733F5BE99}
+  // (accettato anche senza graffe). Qualsiasi altro nome (es. "test") = cartella rinominata.
+  var EXAM_FOLDER_REGEX = /^\{?[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}?$/;
+  var REJECT_RENAMED_TEXT = "File non caricato correttamente.\nSi richiede di riesportare l'esame senza rinominare la cartella generata dal software.";
+  var REJECT_MISSING_DB_TEXT = "File non caricati correttamente. Si prega di esportare nuovamente con tutti i file dell'esame.";
+
+  // Raccoglie i motivi di rifiuto (l'esame viene comunque mostrato)
+  function collectRejectReasons(zip){
+    var reasons = [];
+    if (!findEntry(zip, /(^|\/)PersonalDB$/i)){
+      reasons.push({ text: REJECT_MISSING_DB_TEXT, cause: "Motivo: il file PersonalDB non è presente nello zip." });
+    }
+    var chk = checkExamFolderName(zip);
+    if (!chk.ok){
+      reasons.push({ text: REJECT_RENAMED_TEXT,
+        cause: 'Motivo: la cartella che contiene SD_RawData è stata rinominata ("' + chk.folderName + '"); il nome originale è un codice generato dal software.' });
+    }
+    return reasons;
+  }
+
+  function checkExamFolderName(zip){
+    // Cartella dell'esame = quella che contiene direttamente la sottocartella SD_RawData
+    var folder = null, found = false;
+    zip.forEach(function(relPath){
+      if (found || /(^|\/)__MACOSX\//.test(relPath)) return;
+      var parts = relPath.split('/');
+      for (var i = 0; i < parts.length - 1; i++){
+        if (/^SD_RawData$/i.test(parts[i])){
+          found = true;
+          folder = i > 0 ? parts[i-1] : null;
+          return;
+        }
+      }
+    });
+    if (!found || !folder) return { ok:true }; // niente da verificare
+    return { ok: EXAM_FOLDER_REGEX.test(folder), folderName: folder };
+  }
+
+  // Anagrafica non corretta: nome paziente con caratteri cinesi (CJK)
+  var CJK_REGEX = /[\u2E80-\u2FDF\u3000-\u303F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/;
+  var BAD_REGISTRY_TEXT = "Anagrafica non corretta: inserire i dati del paziente e ricaricare su medeatools.";
+  function hasChineseName(){
+    var n = state.patient && state.patient.Name;
+    return !!(n && CJK_REGEX.test(String(n)));
+  }
+
+  var currentRejectText = '';
+  function showRejectModal(reasons){
+    var overlay = document.getElementById('rejectModalOverlay');
+    var box = document.getElementById('rejectReasonText');
+    box.innerHTML = reasons.map(function(r){
+      return '<div class="reject-item"><div class="reject-text">' + escapeHtml(r.text) + '</div>' +
+             '<div class="reject-cause">' + escapeHtml(r.cause) + '</div></div>';
+    }).join('');
+    currentRejectText = reasons.map(function(r){ return r.text; }).join('\n\n');
+    document.getElementById('rejectCopyMsg').textContent = '';
+    overlay.classList.remove('hidden');
+  }
+  function hideRejectModal(){
+    document.getElementById('rejectModalOverlay').classList.add('hidden');
+  }
+  (function initRejectModal(){
+    var overlay = document.getElementById('rejectModalOverlay');
+    document.getElementById('rejectModalCloseBtn').addEventListener('click', hideRejectModal);
+    document.getElementById('rejectCloseBtn2').addEventListener('click', hideRejectModal);
+    // Si chiude solo con la X o con "Chiudi" (non con click fuori / Esc)
+    document.getElementById('rejectCopyBtn').addEventListener('click', function(){
+      var msg = document.getElementById('rejectCopyMsg');
+      function ok(){ msg.textContent = 'Copiato!'; }
+      function fallback(){
+        var ta = document.createElement('textarea');
+        ta.value = currentRejectText; ta.style.position='fixed'; ta.style.opacity='0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); ok(); } catch(e){ msg.textContent = 'Copia non riuscita'; }
+        document.body.removeChild(ta);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(currentRejectText).then(ok, fallback);
+      } else fallback();
+    });
+  })();
 
   function findEntry(zip, regex){
     var found = null;
@@ -1215,8 +1342,14 @@
   // (ricifrando il nome se in origine era cifrato) e, se la data è cambiata,
   // aggiorna anche StartTime/FirstDate/LastDate e Signal.time.
   // ---------------------------------------------------------------
-  function openEditAllModal(){
+  function openEditAllModal(alertMsg){
     var p = state.patient || {};
+    var alertBox = document.getElementById('editAllAlert');
+    if (typeof alertMsg === 'string' && alertMsg){
+      alertBox.textContent = alertMsg; alertBox.classList.remove('hidden');
+    } else {
+      alertBox.textContent = ''; alertBox.classList.add('hidden');
+    }
     document.getElementById('editAllStatus').innerHTML = '';
     var btn = document.getElementById('editAllProcessBtn');
     btn.disabled = false; btn.textContent = 'Elabora e scarica cartella aggiornata';
@@ -1399,6 +1532,9 @@
       a.textContent = '⬇️ Scarica la cartella aggiornata (.zip)';
       statusEl.appendChild(a);
       editAllLog('Fatto! Puoi scaricare lo zip qui sopra.', 'ok');
+      // Salvataggio completato: avvia il download e chiude il pop up
+      a.click();
+      hideEditAllModal();
       // Le modifiche successive partono dallo zip già aggiornato
       state.rawFile = new File([blob], fileName, { type: 'application/zip' });
       var P = state.patient || (state.patient = {});
@@ -1423,11 +1559,8 @@
     var overlay = document.getElementById('editAllModalOverlay');
     document.getElementById('editAllModalCloseBtn').addEventListener('click', hideEditAllModal);
     document.getElementById('editAllProcessBtn').addEventListener('click', runEditAllProcess);
-    document.getElementById('editAllBtn').addEventListener('click', openEditAllModal);
-    overlay.addEventListener('click', function(e){ if (e.target === overlay) hideEditAllModal(); });
-    document.addEventListener('keydown', function(e){
-      if ((e.key === 'Escape' || e.key === 'Esc') && !overlay.classList.contains('hidden')) hideEditAllModal();
-    });
+    document.getElementById('editAllBtn').addEventListener('click', function(){ openEditAllModal(); });
+    // Il pop up si chiude solo con la X o dopo il salvataggio (non con click fuori / Esc)
     var birthEl = document.getElementById('editPatBirth');
     birthEl.addEventListener('change', function(){
       var a = ageFromBirthStr(birthEl.value);
