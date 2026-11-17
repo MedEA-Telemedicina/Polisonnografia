@@ -201,6 +201,7 @@
     box-shadow:0 10px 40px rgba(0,0,0,.3);
     font-family:var(--sans); color:#17394f;
   }
+  .quality-msg-modal{ max-width:580px; max-height:92vh; overflow:auto; }
   .quality-modal-header{
     display:flex; align-items:center; justify-content:space-between;
     padding:14px 18px; border-bottom:1px solid #eee;
@@ -400,12 +401,19 @@
     </div>
 
     <div id="qualityModalOverlay" class="quality-modal-overlay hidden">
-      <div class="quality-modal">
+      <div class="quality-modal quality-msg-modal">
         <div class="quality-modal-header">
           <h3>Misurazione non accettabile</h3>
           <button type="button" class="quality-modal-close" id="qualityModalCloseBtn" aria-label="Chiudi">&times;</button>
         </div>
-        <div class="quality-modal-body" id="qualityModalBody"></div>
+        <div class="quality-modal-body">
+          <div id="qualityModalBody"></div>
+          <div class="reject-modal-actions">
+            <button type="button" class="btn primary" id="qualityCopyBtn">Copia messaggio</button>
+            <button type="button" class="btn" id="qualityCloseBtn2">Chiudi</button>
+            <span class="reject-copy-msg" id="qualityCopyMsg"></span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -544,6 +552,7 @@
     offsetSec: 0,
     stages: null,         // [{epoch, stage}] or null
     patient: null,
+    patientExtra: null,   // girovita, collo, pressione a riposo/risveglio (se presenti nel DB)
     deviceModel: null
   };
 
@@ -628,7 +637,7 @@
   // (accettato anche senza graffe). Qualsiasi altro nome (es. "test") = cartella rinominata.
   var EXAM_FOLDER_REGEX = /^\{?[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}?$/;
   var REJECT_RENAMED_TEXT = "File non caricato correttamente.\nSi richiede di riesportare l'esame senza rinominare la cartella generata dal software.";
-  var REJECT_MISSING_DB_TEXT = "File non caricati correttamente. Si prega di esportare nuovamente con tutti i file dell'esame.";
+  var REJECT_MISSING_DB_TEXT = "• File non caricati correttamente.\n\nSi prega di esportare nuovamente con tutti i file dell'esame.";
 
   // Raccoglie i motivi di rifiuto (l'esame viene comunque mostrato)
   function collectRejectReasons(zip){
@@ -943,6 +952,8 @@
           }
         }
       }catch(e){ console.warn('Query paziente fallita', e); }
+      try{ state.patientExtra = extractPatientExtras(db); }
+      catch(e){ state.patientExtra = null; console.warn('Dati extra paziente non leggibili', e); }
       try{
         var sRes = db.exec("SELECT epoch, sleep_stage FROM tb_sleepstage_scores ORDER BY epoch");
         if (sRes && sRes[0]){
@@ -1017,26 +1028,61 @@
     return channelNonFlatSeconds(ch) >= QUALITY_MIN_SECONDS;
   }
 
-  // Restituisce l'elenco dei motivi per cui la misurazione non è valida (array di stringhe), vuoto se valida.
+  // Durata in forma discorsiva: "3 ore e 12 minuti", "45 minuti", "meno di un minuto"
+  function humanDuration(sec){
+    sec = Math.max(0, Math.round(sec));
+    var h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+    if (m === 60){ h++; m = 0; }
+    if (h === 0 && m === 0) return 'meno di un minuto';
+    var parts = [];
+    if (h) parts.push(h + (h === 1 ? ' ora' : ' ore'));
+    if (m) parts.push(m + (m === 1 ? ' minuto' : ' minuti'));
+    return parts.join(' e ');
+  }
+
+  // Denominazione dei canali controllati per la validità (usata nel messaggio di rifiuto)
+  var QUALITY_CHANNEL_INFO = {
+    'Flow':          { name: 'del flusso respiratorio' },
+    'Chest/Abdomen': { name: "dell'espansione toracica" },
+    'SpO2':          { name: 'del saturimetro' }
+  };
+
+  // Restituisce i motivi di non accettabilità, sintetici e formali, come elenco di {text}; vuoto se valida.
   function getQualityIssues(){
     var issues = [];
-    var isShortRecording = state.totalDuration < QUALITY_MIN_SECONDS;
-    if (isShortRecording){
-      issues.push('La registrazione dura ' + formatHMS(state.totalDuration) + ', inferiore alle 4 ore richieste.');
+    if (state.totalDuration < QUALITY_MIN_SECONDS){
+      issues.push({ text: 'Numero di ore non sufficienti per la refertazione.' });
     }
-    var qualityLabels = ['Flow', 'Chest/Abdomen', 'SpO2'];
-    qualityLabels.forEach(function(label){
+    ['Flow', 'Chest/Abdomen', 'SpO2'].forEach(function(label){
+      var info = QUALITY_CHANNEL_INFO[label];
       var ch = state.channels.filter(function(c){ return c.label === label; })[0];
       if (!ch){
-        issues.push('Canale "' + label + '" non presente nella registrazione.');
+        issues.push({ text: 'Assenza di traccia ' + info.name + " per l'intera durata della registrazione." });
         return;
       }
-      var nonFlatSeconds = channelNonFlatSeconds(ch);
-      if (nonFlatSeconds < QUALITY_MIN_SECONDS){
-        issues.push('Traccia "' + label + '" presente/valida per solo ' + formatHMS(nonFlatSeconds) + ' (piatta o assente per il resto), richieste almeno 4 ore.');
+      var good = channelNonFlatSeconds(ch);
+      if (good < QUALITY_MIN_SECONDS){
+        var total = state.totalDuration || 0;
+        if (good < 60){
+          issues.push({ text: 'Assenza di traccia ' + info.name + " per l'intera durata della registrazione." });
+        } else if (total > 0 && good < total * 0.1){
+          issues.push({ text: 'Assenza di traccia ' + info.name + " per quasi l'intera durata della registrazione." });
+        } else {
+          issues.push({ text: 'Traccia ' + info.name + ' presente per sole ' + humanDuration(good) + ', insufficiente per la refertazione.' });
+        }
       }
     });
     return issues;
+  }
+
+  // Messaggio di rifiuto: motivi in elenco + richiesta di ripetizione
+  function buildQualityMessage(issues){
+    var lines = [];
+    issues.forEach(function(i){ lines.push('• ' + i.text); });
+    lines.push('');
+    lines.push('Si chiede ripetizione esame.');
+    lines.push('Nessun esame verrà scalato / conteggiato.');
+    return lines.join('\n');
   }
 
   function layoutLanes(){
@@ -1196,15 +1242,40 @@
     box.classList.remove('hidden');
   }
 
+  var currentQualityMessage = '';
   function showQualityIssuesModal(issues){
     var overlay = document.getElementById('qualityModalOverlay');
     var body = document.getElementById('qualityModalBody');
     if (!overlay || !body) return;
-    var listHtml = '<p>La misurazione non soddisfa i criteri minimi di validità:</p><ul>' +
-      issues.map(function(i){ return '<li>' + escapeHtml(i) + '</li>'; }).join('') + '</ul>';
-    body.innerHTML = listHtml;
+    currentQualityMessage = buildQualityMessage(issues);
+    body.innerHTML =
+      '<p style="margin:0 0 10px">Messaggio di rifiuto:</p>' +
+      '<div class="reject-reason-box"><div class="reject-text">' + escapeHtml(currentQualityMessage) + '</div></div>';
+    var msg = document.getElementById('qualityCopyMsg');
+    if (msg) msg.textContent = '';
     overlay.classList.remove('hidden');
   }
+
+  (function initQualityCopy(){
+    var btn = document.getElementById('qualityCopyBtn');
+    var closeBtn = document.getElementById('qualityCloseBtn2');
+    if (closeBtn) closeBtn.addEventListener('click', function(){ hideQualityIssuesModal(); });
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      var msg = document.getElementById('qualityCopyMsg');
+      function ok(){ msg.textContent = 'Messaggio copiato!'; }
+      function fallback(){
+        var ta = document.createElement('textarea');
+        ta.value = currentQualityMessage; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); ok(); } catch(e){ msg.textContent = 'Copia non riuscita'; }
+        document.body.removeChild(ta);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(currentQualityMessage).then(ok, fallback);
+      } else fallback();
+    });
+  })();
 
   function hideQualityIssuesModal(){
     var overlay = document.getElementById('qualityModalOverlay');
@@ -1273,6 +1344,57 @@
     return editDateSqlPromise;
   }
 
+
+  // ---------------------------------------------------------------
+  // Dati extra paziente (se presenti nel PersonalDB): girovita,
+  // circonferenza collo, pressione a riposo e al risveglio.
+  // Le colonne vengono cercate per nome nelle tabelle anagrafiche,
+  // quindi non dipendono da uno schema fisso.
+  // ---------------------------------------------------------------
+  function extractPatientExtras(db){
+    var tRes = db.exec("SELECT name FROM sqlite_master WHERE type='table'");
+    if (!tRes || !tRes[0]) return null;
+    var found = { waist:null, neck:null, bp:{ rest:{}, wake:{}, other:{} } };
+    function present(v){
+      if (v === null || v === undefined) return false;
+      var t = String(v).trim();
+      return t !== '' && t !== '0' && t !== '0.0' && !/^0+([.,]0+)?$/.test(t);
+    }
+    tRes[0].values.forEach(function(row){
+      var t = row[0];
+      if (!/patient|person|basic|info|exam|report|clinic|vital|anamn/i.test(t)) return;
+      var r;
+      try{ r = db.exec('SELECT * FROM "' + String(t).replace(/"/g,'""') + '" LIMIT 1'); }catch(e){ return; }
+      if (!r || !r[0] || !r[0].values[0]) return;
+      var cols = r[0].columns, vals = r[0].values[0];
+      cols.forEach(function(c, i){
+        var v = vals[i];
+        if (!present(v) || v instanceof Uint8Array) return;
+        var n = String(c).toLowerCase();
+        if (/waist|girovita|abdomin/.test(n)){ if (!found.waist) found.waist = v; return; }
+        if (/neck|collo/.test(n)){ if (!found.neck) found.neck = v; return; }
+        var isBP = /sbp|dbp|systol|diastol|sistol|bloodpres|pressure|pressione|(^|[^a-z])bp([^a-z]|$)|^bp/.test(n) && !/bpm|pulse|heart|hr/.test(n);
+        if (!isBP) return;
+        var phase = /wake|awak|morning|mattin|risvegl|after|post|getup|rise/.test(n) ? 'wake'
+                  : /rest|riposo|sleep|sit|basal|baseline|before|prior|pre(?!ss)|evening|night|sera|supine/.test(n) ? 'rest'
+                  : 'other';
+        var part = /sbp|sys|sist|high|max|upper/.test(n) ? 'sys'
+                 : /dbp|dia|low|min|lower/.test(n) ? 'dia' : 'comb';
+        if (found.bp[phase][part] === undefined) found.bp[phase][part] = v;
+      });
+    });
+    return found;
+  }
+
+  function bpText(g){
+    if (!g) return '';
+    if (g.comb) return String(g.comb).trim();
+    var s = g.sys !== undefined ? formatMeasurement(g.sys) : '';
+    var d = g.dia !== undefined ? formatMeasurement(g.dia) : '';
+    if (s && d) return s + '/' + d;
+    return s || d || '';
+  }
+
   function buildPatientBar(){
     var p = state.patient || {};
     function chip(label, value, cls){
@@ -1284,6 +1406,15 @@
     if (p.Height) line.push(chip('Altezza', escapeHtml(formatMeasurement(p.Height)) + ' cm'));
     if (p.Weight) line.push(chip('Peso', escapeHtml(formatMeasurement(p.Weight)) + ' kg'));
     if (p.BMI) line.push(chip('BMI', Number(p.BMI).toFixed(1)));
+    var x = state.patientExtra;
+    if (x){
+      if (x.waist) line.push(chip('Girovita', escapeHtml(formatMeasurement(x.waist)) + ' cm'));
+      if (x.neck) line.push(chip('Collo', escapeHtml(formatMeasurement(x.neck)) + ' cm'));
+      var bpRest = bpText(x.bp.rest), bpWake = bpText(x.bp.wake), bpOther = bpText(x.bp.other);
+      if (bpRest) line.push(chip('PA riposo', escapeHtml(bpRest) + ' mmHg'));
+      if (bpWake) line.push(chip('PA risveglio', escapeHtml(bpWake) + ' mmHg'));
+      if (bpOther && !bpRest && !bpWake) line.push(chip('Pressione', escapeHtml(bpOther) + ' mmHg'));
+    }
     // Data/ora di avvio dell'esame: proprietà del paziente
     if (state.startDate){
       var stale = isStartDateStale(state.startDate);
